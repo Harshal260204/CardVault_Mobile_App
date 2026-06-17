@@ -98,12 +98,7 @@ export class OcrController {
   }
 
   @Post('reprocess/:id')
-  @Roles(
-    UserRole.manager,
-    UserRole.tenant_admin,
-    UserRole.platform_super_admin,
-    UserRole.platform_support,
-  )
+  @Roles(UserRole.super_admin)
   async reprocess(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,

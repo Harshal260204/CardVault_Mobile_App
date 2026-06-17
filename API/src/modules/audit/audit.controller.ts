@@ -10,12 +10,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import type { RequestUser } from '../auth/auth.types';
 
 @Controller('audit-events')
-@Roles(
-  UserRole.manager,
-  UserRole.tenant_admin,
-  UserRole.platform_super_admin,
-  UserRole.platform_support,
-)
+@Roles(UserRole.super_admin)
 
 export class AuditEventsController {
   constructor(private readonly auditEventsService: AuditEventsService) {}
