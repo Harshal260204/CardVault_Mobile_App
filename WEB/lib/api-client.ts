@@ -18,7 +18,7 @@ import type {
   OcrJobRecord,
   OrgUserRecord,
   PaginatedList,
-  PlanRecord,
+
   UserProfile,
   UserRole,
 } from '@/lib/types';
@@ -534,10 +534,6 @@ export async function fetchOrganizations(
   return data.data;
 }
 
-export async function fetchPlans(client: AxiosInstance): Promise<PlanRecord[]> {
-  const { data } = await client.get<ApiResponse<PlanRecord[]>>('/admin/plans');
-  return data.data;
-}
 
 export async function createOrganization(
   client: AxiosInstance,
@@ -652,45 +648,6 @@ export async function fetchPlatformAnalytics(client: AxiosInstance): Promise<{
   return data.data;
 }
 
-export async function fetchBillingSubscription(client: AxiosInstance): Promise<{
-  organizationId: string;
-  plan: string;
-  planName: string;
-  planPriceInr: number;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
-  billingEnabled: boolean;
-}> {
-  const { data } = await client.get<
-    ApiResponse<{
-      organizationId: string;
-      plan: string;
-      planName: string;
-      planPriceInr: number;
-      stripeCustomerId: string | null;
-      stripeSubscriptionId: string | null;
-      billingEnabled: boolean;
-    }>
-  >('/billing/subscription');
-  return data.data;
-}
 
-export async function createBillingCheckout(
-  client: AxiosInstance,
-  planCode: 'pro' = 'pro',
-): Promise<{ url: string; sessionId: string }> {
-  const { data } = await client.post<
-    ApiResponse<{ url: string; sessionId: string }>
-  >('/billing/checkout', { planCode });
-  return data.data;
-}
-
-export async function createBillingPortal(
-  client: AxiosInstance,
-): Promise<{ url: string }> {
-  const { data } =
-    await client.post<ApiResponse<{ url: string }>>('/billing/portal');
-  return data.data;
-}
 
 export { axios };

@@ -1,4 +1,4 @@
-import {
+ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -13,7 +13,7 @@ import {
 } from '../../common/utils/pagination';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { RequestUser } from '../auth/auth.types';
-import { OrganizationQuotaService } from '../organizations/organization-quota.service';
+
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -24,7 +24,6 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly quotas: OrganizationQuotaService,
   ) {}
 
   async list(user: RequestUser, query: ListUsersQueryDto) {
@@ -152,10 +151,7 @@ export class UsersService {
       throw new ForbiddenException('You cannot deactivate your own account');
     }
 
-    if (dto.isActive === true && !target.isActive && target.organizationId) {
-      await this.quotas.assertOrgActive(target.organizationId);
-      await this.quotas.assertCanAddUser(target.organizationId);
-    }
+
 
     const updated = await this.prisma.user.update({
       where: { id },
@@ -233,10 +229,7 @@ export class UsersService {
       );
     }
 
-    if (organizationId) {
-      await this.quotas.assertOrgActive(organizationId);
-      await this.quotas.assertCanAddUser(organizationId);
-    }
+
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 

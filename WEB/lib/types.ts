@@ -163,10 +163,6 @@ export interface OrganizationRecord {
   id: string;
   name: string;
   slug: string;
-  plan: string;
-  planName: string;
-  planPriceInr: number;
-  planBillingInterval: string | null;
   maxUsers: number;
   storageQuotaGb: number;
   isActive: boolean;
@@ -176,15 +172,7 @@ export interface OrganizationRecord {
   managerName?: string;
 }
 
-export interface PlanRecord {
-  id: string;
-  code: string;
-  name: string;
-  priceInr: number;
-  billingInterval: string | null;
-  description: string | null;
-  isActive: boolean;
-}
+
 
 export interface PaginatedList<T> {
   items: T[];

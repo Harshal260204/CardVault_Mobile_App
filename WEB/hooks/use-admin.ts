@@ -12,7 +12,6 @@ import {
   fetchDashboard,
   fetchExports,
   fetchOrganizations,
-  fetchPlans,
   updateOrganization,
   updateOrgUser,
 } from '@/lib/api-client';
@@ -63,13 +62,7 @@ export function useOrganizations(enabled = true) {
   });
 }
 
-export function usePlans(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.admin.plans,
-    queryFn: () => fetchPlans(api),
-    enabled,
-  });
-}
+
 
 export function useCreateExport() {
   const queryClient = useQueryClient();
