@@ -5,7 +5,6 @@ import {
   BarChart3,
   CalendarDays,
   Contact,
-  CreditCard,
   Download,
   LayoutDashboard,
   Menu,
@@ -62,7 +61,6 @@ const navGroups: readonly NavGroup[] = [
     items: [
       { href: '/admin/audit-log', label: 'Audit Log', icon: Shield },
       { href: '/admin/export', label: 'Export', icon: Download },
-      { href: '/admin/billing', label: 'Billing', icon: CreditCard },
     ],
   },
 ];

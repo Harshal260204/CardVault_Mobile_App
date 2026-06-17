@@ -1,6 +1,6 @@
 import type { UserRole } from '@/lib/types';
 
-export const MOBILE_APP_ROLES: UserRole[] = ['employee', 'manager'];
+export const MOBILE_APP_ROLES: UserRole[] = ['employee', 'manager', 'user'];
 
 export function isMobileAppRole(role: string | undefined | null): boolean {
   return role != null && (MOBILE_APP_ROLES as string[]).includes(role);
@@ -18,6 +18,8 @@ export function formatRoleLabel(role: UserRole | string): string {
       return 'Manager';
     case 'employee':
       return 'Employee';
+    case 'user':
+      return 'User';
     default:
       return role;
   }

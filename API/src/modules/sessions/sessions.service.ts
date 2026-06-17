@@ -23,7 +23,7 @@ export class SessionsService {
 
   private orgWhere(user: RequestUser): Prisma.EventSessionWhereInput {
     return {
-      organizationId: user.organizationId,
+      organizationId: user.organizationId!,
       deletedAt: null,
     };
   }
@@ -95,7 +95,7 @@ export class SessionsService {
       data: {
         sessionId: session.id,
         userId: user.id,
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
       },
     });
 
@@ -188,7 +188,7 @@ export class SessionsService {
       create: {
         sessionId: id,
         userId: user.id,
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
       },
       update: {},
     });
@@ -204,7 +204,7 @@ export class SessionsService {
     const member = await this.prisma.user.findFirst({
       where: {
         id: dto.userId,
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
         deletedAt: null,
       },
     });
@@ -216,7 +216,7 @@ export class SessionsService {
       create: {
         sessionId,
         userId: dto.userId,
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
       },
       update: {},
     });

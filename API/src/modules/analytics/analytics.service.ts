@@ -15,7 +15,7 @@ export class AnalyticsService {
     ) {
       return queryOrgId;
     }
-    return user.organizationId;
+    return user.organizationId!!;
   }
 
   async leadFunnel(user: RequestUser, queryOrgId?: string) {

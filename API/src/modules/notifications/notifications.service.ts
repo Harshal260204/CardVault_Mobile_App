@@ -29,7 +29,7 @@ export class NotificationsService {
       query.limit,
     );
     const where = {
-      organizationId: user.organizationId,
+      organizationId: user.organizationId!,
       userId: user.id,
       ...(query.unreadOnly ? { isRead: false } : {}),
     };
@@ -64,7 +64,7 @@ export class NotificationsService {
   async unreadCount(user: RequestUser) {
     const count = await this.prisma.notification.count({
       where: {
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
         userId: user.id,
         isRead: false,
       },
@@ -76,7 +76,7 @@ export class NotificationsService {
     const row = await this.prisma.notification.findFirst({
       where: {
         id,
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
         userId: user.id,
       },
     });
@@ -93,7 +93,7 @@ export class NotificationsService {
   async markAllRead(user: RequestUser) {
     const result = await this.prisma.notification.updateMany({
       where: {
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
         userId: user.id,
         isRead: false,
       },

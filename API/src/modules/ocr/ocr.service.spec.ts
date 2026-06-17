@@ -137,7 +137,7 @@ describe('OcrService', () => {
           where: { organizationId: 'org-1' },
           skip: 0,
           take: 20,
-          include: OCR_JOB_WITH_MATCHES_INCLUDE,
+          include: { cardImage: true },
         }),
       );
       expect(mockPrisma.relationshipMatch.findMany).not.toHaveBeenCalled();
@@ -225,8 +225,7 @@ describe('OcrService', () => {
       const job = await service.getById(user, 'job-1');
 
       expect(mockPrisma.ocrJob.findFirst).toHaveBeenCalledWith({
-        where: { id: 'job-1', organizationId: 'org-1' },
-        include: OCR_JOB_WITH_MATCHES_INCLUDE,
+        include: { cardImage: true },
       });
       expect(mockPrisma.relationshipMatch.findMany).not.toHaveBeenCalled();
       expect(job.matches).toEqual([

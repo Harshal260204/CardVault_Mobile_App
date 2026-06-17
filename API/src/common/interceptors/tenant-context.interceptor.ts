@@ -43,7 +43,7 @@ export class TenantContextInterceptor implements NestInterceptor {
     const store = buildTenantStore({ user, routeAllowsPlatformBypass });
 
     req[TENANT_REQUEST_KEY] = {
-      organizationId: user.organizationId,
+      organizationId: user.organizationId!!,
       userId: user.id,
       role: user.role,
       bypassTenantScope: store.bypassTenantScope,

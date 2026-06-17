@@ -3,7 +3,8 @@ export type UserRole =
   | 'manager'
   | 'tenant_admin'
   | 'platform_support'
-  | 'platform_super_admin';
+  | 'platform_super_admin'
+  | 'user';
 export type CaptureMode = 'visitor' | 'exhibitor' | 'quick_capture' | 'legacy';
 export type LeadQualifier = 'hot' | 'warm' | 'cold';
 export type OcrStatus =

@@ -9,7 +9,6 @@ import { QueueModule } from './queue/queue.module';
 import { RedisModule } from './redis/redis.module';
 import { StorageModule } from './storage/storage.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
-import { BillingModule } from './modules/billing/billing.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
 import { ImagesModule } from './modules/images/images.module';
@@ -51,7 +50,6 @@ import { PrismaModule } from './prisma/prisma.module';
     ExportsModule,
     OcrModule,
     ImagesModule,
-    BillingModule,
     NotificationsModule,
   ],
   providers: [

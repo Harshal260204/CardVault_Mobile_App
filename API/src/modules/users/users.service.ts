@@ -152,7 +152,7 @@ export class UsersService {
       throw new ForbiddenException('You cannot deactivate your own account');
     }
 
-    if (dto.isActive === true && !target.isActive) {
+    if (dto.isActive === true && !target.isActive && target.organizationId) {
       await this.quotas.assertOrgActive(target.organizationId);
       await this.quotas.assertCanAddUser(target.organizationId);
     }
@@ -233,8 +233,10 @@ export class UsersService {
       );
     }
 
-    await this.quotas.assertOrgActive(organizationId);
-    await this.quotas.assertCanAddUser(organizationId);
+    if (organizationId) {
+      await this.quotas.assertOrgActive(organizationId);
+      await this.quotas.assertCanAddUser(organizationId);
+    }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 

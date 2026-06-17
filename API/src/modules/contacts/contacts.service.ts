@@ -133,7 +133,7 @@ export class ContactsService {
     });
 
     const contact = await this.prisma.contact.create({
-      data: buildContactCreateData(dto, user.organizationId, user.id),
+      data: buildContactCreateData(dto, user.organizationId!, user.id),
     });
 
     await this.audit.logForUser(user, {
@@ -313,7 +313,7 @@ export class ContactsService {
     const session = await this.prisma.eventSession.findFirst({
       where: {
         id: sessionId,
-        organizationId: user.organizationId,
+        organizationId: user.organizationId!,
         deletedAt: null,
       },
     });

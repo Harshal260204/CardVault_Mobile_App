@@ -66,7 +66,7 @@ export class AuthService {
   private toRequestUser(payload: JwtPayload): RequestUser {
     return {
       id: payload.sub,
-      organizationId: payload.org,
+      organizationId: payload.org || undefined,
       role: payload.role,
       email: payload.email,
       jti: payload.jti,
@@ -83,7 +83,7 @@ export class AuthService {
     const expiresIn = this.accessTtlSeconds;
     const payload: JwtPayload = {
       sub: user.id,
-      org: user.organizationId ?? '',
+      org: user.organizationId ?? undefined,
       role: user.role,
       email: user.email,
       jti,
@@ -106,7 +106,7 @@ export class AuthService {
     const jti = randomUUID();
     const payload: JwtPayload = {
       sub: user.id,
-      org: user.organizationId ?? '',
+      org: user.organizationId ?? undefined,
       role: user.role,
       email: user.email,
       jti,
@@ -256,14 +256,28 @@ export class AuthService {
 
     const passwordHash = await AuthService.hashPassword(dto.password);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email,
-        fullName: dto.fullName,
-        passwordHash,
-        role: 'user',
-        isActive: true,
-      },
+    const orgName = `${dto.fullName || 'User'}'s Vault`;
+    const orgSlug = `vault-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          name: orgName,
+          slug: orgSlug,
+          plan: 'free',
+        },
+      });
+
+      return tx.user.create({
+        data: {
+          email,
+          fullName: dto.fullName,
+          passwordHash,
+          role: 'user',
+          organizationId: org.id,
+          isActive: true,
+        },
+      });
     });
 
     const tokens = await this.issueTokens(user);
