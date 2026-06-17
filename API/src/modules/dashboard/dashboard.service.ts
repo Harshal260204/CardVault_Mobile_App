@@ -25,10 +25,8 @@ export interface DashboardStatsDto {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStats(user: RequestUser): Promise<DashboardStatsDto> {
-    const orgId = user.organizationId;
+  async getStats(): Promise<DashboardStatsDto> {
     const baseContact = {
-      organizationId: orgId,
       deletedAt: null,
       isMerged: false,
     };
@@ -52,12 +50,12 @@ export class DashboardService {
     ] = await Promise.all([
       this.prisma.contact.count({ where: baseContact }),
       this.prisma.user.count({
-        where: { organizationId: orgId, deletedAt: null },
+        where: { deletedAt: null },
       }),
       this.prisma.eventSession.count({
-        where: { organizationId: orgId, deletedAt: null, status: 'active' },
+        where: { deletedAt: null, status: 'active' },
       }),
-      this.prisma.export.count({ where: { organizationId: orgId } }),
+      this.prisma.export.count(),
       this.prisma.contact.count({
         where: { ...baseContact, leadQualifier: 'hot' },
       }),
@@ -80,7 +78,6 @@ export class DashboardService {
         select: { createdAt: true },
       }),
       this.prisma.auditEvent.findMany({
-        where: { organizationId: orgId },
         orderBy: { createdAt: 'desc' },
         take: 8,
         include: { actor: { select: { email: true } } },

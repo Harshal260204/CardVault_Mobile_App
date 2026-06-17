@@ -20,27 +20,18 @@ export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Get('lead-funnel')
-  async leadFunnel(
-    @CurrentUser() user: RequestUser,
-    @Query('organizationId') organizationId?: string,
-  ) {
-    return { data: await this.analytics.leadFunnel(user, organizationId) };
+  async leadFunnel() {
+    return { data: await this.analytics.leadFunnel() };
   }
 
   @Get('encounter-types')
-  async encounterTypes(
-    @CurrentUser() user: RequestUser,
-    @Query('organizationId') organizationId?: string,
-  ) {
-    return { data: await this.analytics.encounterTypes(user, organizationId) };
+  async encounterTypes() {
+    return { data: await this.analytics.encounterTypes() };
   }
 
   @Get('sessions')
-  async sessions(
-    @CurrentUser() user: RequestUser,
-    @Query('organizationId') organizationId?: string,
-  ) {
-    return { data: await this.analytics.sessions(user, organizationId) };
+  async sessions() {
+    return { data: await this.analytics.sessions() };
   }
 
   @Get('platform')

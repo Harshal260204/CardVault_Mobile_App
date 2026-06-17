@@ -16,8 +16,8 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get()
-  async stats(@CurrentUser() user: RequestUser) {
-    const data = await this.dashboardService.getStats(user);
+  async stats() {
+    const data = await this.dashboardService.getStats();
     return { data };
   }
 }
