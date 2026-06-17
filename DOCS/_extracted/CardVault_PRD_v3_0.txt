@@ -1,0 +1,1865 @@
+CARDVAULT
+Enterprise Business Card Management Platform
+Product Requirements Document
+Version 3.0  |  Context-Aware Capture Edition  |  Consolidated PRD
+Classification: CONFIDENTIAL
+Field
+Detail
+Document Owner
+Product Architecture Team
+Version
+3.0 — Consolidated (v1.0 Baseline + v2.0 Context-Aware Capture)
+Previous Versions
+v1.0 (Baseline Architecture), v2.0 (Context-Aware Capture Edition)
+Platform
+CardVault SaaS
+Audience
+Enterprise Architects, Senior Engineers, Product Leadership
+Status
+APPROVED — PRODUCTION PLANNING
+Last Revised
+May 2026
+Key Changes
+All v1.0 requirements + context-aware capture modes (Visitor / Exhibitor / Quick Capture), event session architecture, lead qualification layer, cross-event relationship history
+1. Executive Summary
+CardVault is a multi-tenant, enterprise-grade SaaS platform engineered to digitize, centralize, and operationalize business card data across sales organizations. Built on a React Native mobile foundation with a Node.js/NestJS backend powered by Supabase's managed PostgreSQL infrastructure, CardVault eliminates the systemic inefficiencies associated with manual contact management, fragmented contact ownership, and data silos endemic to large sales teams.
+The platform delivers a seamless capture-to-contact workflow: a sales employee photographs a physical business card, Google ML Kit OCR extracts structured contact data with confidence scoring, the backend deduplication engine resolves or merges against existing records, and the contact is immediately available organization-wide through a real-time searchable interface. Original card images are preserved in secure object storage with full lifecycle management.
+CardVault v3.0 extends this foundation with context-aware capture. Every card scan now begins with context selection — Visitor (attending an event), Exhibitor (collecting leads at a booth), or Quick Capture (ad-hoc encounters). Each mode delivers a distinct capture experience, data model, and downstream workflow, transforming CardVault from a digitization tool into a relationship intelligence platform.
+CardVault is designed for internal enterprise distribution on Android (APK-based deployment), with a centralized admin dashboard for tenant management, OCR quality monitoring, audit compliance, and storage governance. v3.0 is backward-compatible with all v1.0 data — all changes are additive.
+1.1 Strategic Value Proposition
+Capability
+Business Impact
+Automated OCR Contact Extraction
+Eliminates manual data entry; reduces contact creation time from ~4 min to <30 sec
+Context-Aware Capture Modes
+Visitor / Exhibitor / Quick Capture modes optimize UX per environment; context preserved for every contact
+Event Session Architecture
+Groups captures by event; team-shared sessions; per-session analytics and export
+Lead Qualification (Exhibitor)
+Hot/Warm/Cold rating + notes at scan time; replaces $200–800/event trade show lead capture devices
+Encounter Tagging (Quick Capture)
+Flight, B2B, Referral, and other tags enable context-aware follow-up for ad-hoc encounters
+Cross-Event Relationship History
+Detects returning contacts across events; surfaces full meeting history instead of duplicate prompt
+Organization-Wide Contact Visibility
+Breaks down contact ownership silos; shared CRM-grade contact database
+Duplicate Detection Engine
+Prevents fragmented records; enforces data quality at ingestion
+Offline-First Mobile Architecture
+Ensures continuity at conferences, events, and low-connectivity environments; all modes fully offline
+Multi-Tenant RBAC Architecture
+Supports enterprise department isolation with granular permission hierarchies
+Immutable Audit Trails
+Meets enterprise compliance requirements for data access and modification
+Centralized Admin Dashboard
+Full operational visibility: OCR quality, storage, event sessions, lead funnels, encounter analytics
+1.2 What Changed from v1.0 to v3.0
+Area
+v1.0 Behavior
+v3.0 Behavior
+Home Screen
+Single capture button
+Context selection: Visitor / Exhibitor / Quick Capture
+Event Sessions
+Not supported
+Full event session creation, naming, and grouping per capture mode
+Lead Qualification
+Not supported
+Exhibitor mode: Hot/Warm/Cold rating + notes at scan time
+Encounter Tagging
+Not supported
+Quick Capture mode: Flight, B2B, Referral, Dinner, Other tags
+Deduplication UX
+'Duplicate found — merge?' prompt
+'You met this person at [Event] on [Date]' — relationship history
+Contact Grouping
+Flat org-wide list
+Grouped by event session; filterable by mode and session
+Analytics
+Org-level OCR and contact metrics
+Per-event analytics, lead funnel metrics, encounter-type breakdowns
+Admin Dashboard
+User and OCR management
++ Event session management, lead export per event, encounter analytics
+2. Product Vision
+CardVault's north-star vision is to be the definitive enterprise system of record for first-contact relationship data — and to extend that record to include the full context of every relationship's origin.
+2.1 Vision Statement
+"To eliminate the gap between the physical exchange of a business card and the organization's unified, actionable knowledge of that contact relationship — ensuring that every connection is stored with the context, qualification, and history needed to convert it into revenue."
+2.2 The Core Insight
+Every other contact capture application treats the business card as the unit of value. CardVault v3.0 treats the relationship context as the unit of value. A card captured at a trade show booth by an exhibitor is a sales lead. A card captured at a competitor's booth by a visitor is competitive intelligence. A card captured on a flight is a personal introduction. These are fundamentally different assets requiring different workflows.
+2.3 Design Principles
+Context First: Capture mode selection is the first action — before the camera opens.
+Capture First: The mobile interface must enable frictionless card capture in under 30 seconds.
+Zero Friction per Mode: Each mode is optimized for its specific environment — exhibitors need speed, visitors need organization, quick capture needs simplicity.
+Data Fidelity: OCR extraction accuracy and original image preservation are non-negotiable.
+Relationship Intelligence: The same person appearing in multiple events is not a duplicate problem — it is a relationship history to be surfaced and celebrated.
+Lead-Native for Exhibitors: The exhibitor mode is a first-class lead capture tool, not an afterthought.
+Organization-Wide Intelligence: No contact should be siloed to an individual user.
+Enterprise Security by Default: All data is encrypted, access-controlled, and audited.
+Offline Resilience: All three modes function fully offline; event sessions sync on reconnection.
+Operational Observability: Administrators must have full visibility into system health and data quality.
+3. Problem Statement
+3.1 Current State Analysis
+Enterprise sales organizations operating at scale face a structural breakdown in contact data management. The following failure modes are consistently observed:
+Problem Domain
+Root Cause
+Business Impact
+Manual Contact Entry
+No automated capture pipeline
+High labor cost; 3–6 min per card; error-prone
+Fragmented Ownership
+Contacts stored in individual devices/email apps
+Loss of institutional knowledge on employee departure
+Duplicate Records
+No deduplication at point of entry
+CRM data quality degradation; duplicated outreach
+Context Loss at Capture
+No capture mode awareness
+Sales team can't distinguish hot leads from polite exchanges; follow-up quality degrades
+Physical Card Loss
+Cards stored physically or discarded post-entry
+No audit trail; no secondary verification source
+Disconnected Databases
+Multiple tools used in parallel
+No single source of truth; synchronization cost
+Zero Analytics
+No tracking of contact acquisition patterns
+No visibility into networking ROI or team performance
+No Compliance Trail
+Contact data created without audit controls
+GDPR/data retention risk exposure
+3.2 The Context Loss Problem
+Context Lost
+Downstream Impact
+CardVault v3.0 Solution
+Exhibitor doesn't know which leads from a trade show were 'hot' vs collected politely
+Sales team wastes time on cold leads; hot leads don't get priority follow-up
+Lead qualifier (Hot/Warm/Cold) captured at scan time in Exhibitor mode
+Visitor can't remember which booth they got a card from
+Follow-up emails reference wrong context; relationship starts cold
+Event session grouping with booth context and per-scan notes
+Person met on a flight has no record of how the relationship started
+Outreach feels cold; person doesn't remember the connection
+Quick Capture with encounter type tag and relationship note
+Same person at two events treated as a duplicate
+Merge destroys event-specific context; loses meeting history
+Cross-event relationship history: 'You met this person at X and Y'
+Manager can't see which events generated the most valuable leads
+No ROI data on trade show attendance
+Per-event analytics: leads captured, qualification breakdown, scan volume
+3.3 Quantified Opportunity
+A sales organization of 200 employees collecting 5 cards/week loses 3,000+ minutes weekly to manual data entry.
+Industry research suggests 30–40% of contacts entered manually contain at least one error.
+An estimated 15–25% of contacts in unmanaged environments are duplicate records across users.
+Physical cards have an average loss rate of 12–18% before digital capture occurs.
+Trade show lead capture devices cost $200–800/event/device — CardVault Exhibitor mode replaces these entirely.
+4. Goals & Objectives
+4.1 Product Goals
+Goal
+Success Metric
+Target
+OCR Accuracy
+Field extraction accuracy on clean card images
+>= 92%
+Capture Speed (all modes)
+Time from camera open to contact saved
+< 30 seconds
+Capture Speed (Exhibitor)
+Scan to saved with qualification rating
+< 25 seconds
+Mode Adoption
+% of captures using a named context mode
+>= 85% of scans
+Event Session Usage
+% of Visitor/Exhibitor captures under a named session
+>= 90%
+Lead Qualification
+% of Exhibitor scans with Hot/Warm/Cold rating
+>= 75%
+Encounter Tagging
+% of Quick Capture scans with an encounter type tag
+>= 80%
+Relationship History
+% of returning contacts where history is surfaced
+100% (automated)
+Deduplication
+Duplicate contact creation rate post-launch
+< 3% of new contacts
+Offline Support
+% of capture workflows completable without connectivity
+100% capture; sync on restore
+System Availability
+Backend uptime SLA
+>= 99.9% monthly
+API Response Time
+p95 contact search API latency
+< 300ms
+Image Retrieval
+p95 latency for business card image load
+< 1.5 seconds
+Session View Load
+Load time for up to 500 contacts in session
+< 1 second
+Relationship Lookup
+Cross-event match response time
+< 500ms
+Admin Dashboard Load
+Dashboard data load time
+< 2 seconds
+4.2 MVP Objectives
+Deliver stable Android APK distributed via internal MDM with context selection home screen.
+Implement full OCR pipeline with Google ML Kit with confidence scoring and manual correction.
+Implement Visitor mode: event session creation, template selection, scan-under-session, session view.
+Implement Exhibitor mode: booth event creation, high-volume scan queue, Hot/Warm/Cold qualifier, notes.
+Implement Quick Capture mode: encounter type tagging, quick note, follow-up date with local notification.
+Build multi-tenant PostgreSQL contact database with organization-level isolation.
+Deploy secure Supabase Storage with signed URL access for business card images.
+Implement RBAC with three tiers: Sales Employee, Organization Manager, Super Admin.
+Provide offline capture queue with background synchronization (all three modes).
+Update database schema with event_sessions, session_members, contact_encounters tables.
+Implement cross-event relationship history in deduplication engine.
+Add per-event analytics endpoints and admin dashboard event management panel.
+Enable per-event CSV export for Organization Managers.
+5. User Personas
+5.1 Persona 1 — Field Sales Rep (Visitor Mode Primary User)
+Attribute
+Detail
+Role
+Account executive, business development rep, sales associate
+Primary Mode
+Visitor — attends trade shows, conferences, and client events
+Primary Device
+Android smartphone (company-issued or BYOD with MDM enrollment)
+Scenario
+Walks the floor at a trade show, collecting cards from 20–40 exhibitor booths over 2 days
+Key Need
+Every card stored under the event name; can review all cards from 'CES 2026' in one place later
+Pain Point (pre-CardVault)
+All 40 cards dumped into flat org list; impossible to remember who was from which booth a week later
+v3.0 Value
+Creates 'CES 2026' session on arrival; every scan auto-tagged to that session; reviews session on the flight home
+Connectivity Profile
+Frequently offline on event floor; syncs during breaks or on hotel WiFi
+5.2 Persona 2 — Booth Manager / Sales Director (Exhibitor Mode Primary User)
+Attribute
+Detail
+Role
+Booth manager, regional sales director, enterprise account executive
+Primary Mode
+Exhibitor — staffing a company booth at a trade show or conference
+Scenario
+Manages a booth for 3 days; team of 4 scans 200+ cards; needs to export qualified lead list to CRM on Day 4
+Key Need
+Speed (no time for long forms), lead qualification at capture, exportable lead list segmented by Hot/Warm/Cold
+Pain Point (pre-CardVault)
+Scanned cards go into flat list with no qualification; follow-up team has to call everyone equally
+v3.0 Value
+Creates 'Booth — TechExpo 2026' session; team scans at high volume; each card gets Hot/Warm/Cold + 1-line note; exports sorted lead list at end of event
+Connectivity Profile
+Intermittent on show floor; designed for full offline operation with end-of-day sync
+5.3 Persona 3 — Relationship Builder (Quick Capture Primary User)
+Attribute
+Detail
+Role
+Senior executive, investor, partnership manager, consultant
+Primary Mode
+Quick Capture — ad-hoc encounters outside formal events
+Scenario
+Meets a potential partner on a flight; exchanges cards; wants to log the context before landing
+Key Need
+Instant capture with encounter context (e.g. 'Flight — SFO to NYC'); quick note; no session setup overhead
+Pain Point (pre-CardVault)
+Card saved with no context; three weeks later has no idea who this person is or why they matter
+v3.0 Value
+Taps Quick Capture; selects 'Flight'; scans card; adds note; saved in 20 seconds
+Connectivity Profile
+Often offline or in airplane mode; full offline support required
+5.4 Persona 4 — Organization Manager (Team Lead / Sales Director)
+Attribute
+Detail
+Role
+Sales director, regional manager, team lead
+Primary Device
+Android mobile + desktop browser for dashboard access
+Primary Use Case
+Monitor team contact acquisition, manage user access, export contact lists for CRM import
+Key Needs
+Visibility into team activity, per-event lead analytics, event session management, Hot/Warm/Cold lead funnel export, bulk export capability, user management, duplicate resolution
+Technical Comfort
+High — comfortable with SaaS dashboards and data exports
+Connectivity Profile
+Primarily office-based with stable connectivity
+5.5 Persona 5 — Super Administrator (Platform Operator)
+Attribute
+Detail
+Role
+IT administrator, platform engineer, DevOps / SRE
+Primary Device
+Desktop browser
+Primary Use Case
+Tenant provisioning, system monitoring, OCR quality management, storage governance, compliance, event session monitoring across tenants
+Key Needs
+Full system observability, audit log access, tenant isolation enforcement, storage monitoring and alerting, encounter type usage analytics
+Technical Comfort
+Expert — understands distributed systems, databases, and cloud infrastructure
+6. Functional Requirements
+6.1 Context Selection — Home Screen
+This is the most important UX change in v3.0. The home screen is the gateway to all three capture modes. Design must make mode selection feel like a natural first step, not overhead.
+FR-HOME-001: Home screen displays three primary capture mode cards prominently above the recent contacts feed.
+FR-HOME-002: Mode cards display: icon, mode name, one-line description, and active session indicator (if a session is already open).
+FR-HOME-003: User can have one active session per mode simultaneously.
+FR-HOME-004: Active session indicator shows session name and scan count; tapping resumes the session directly.
+FR-HOME-005: Recent contacts feed below mode cards shows last 10 contacts captured (across all modes), with mode badge indicator.
+FR-HOME-006: Search bar on home screen searches org-wide across all modes and sessions.
+FR-HOME-007: Mode selection is not mandatory — a 'Skip / Quick Scan' fallback allows direct OCR without mode context (backwards compatibility).
+6.2 Visitor Mode
+6.2.1 Event Session Management
+FR-VIS-001: User taps 'Visitor' on home screen to enter Visitor mode.
+FR-VIS-002: If no active Visitor session exists, user is presented with: 'Join existing event' (org-shared sessions) or 'Create new event'.
+FR-VIS-003: Create event flow: event name (required), event type template (Trade Show / Conference / Product Demo / Networking / Other), date (defaults to today), location (optional, GPS-assisted).
+FR-VIS-004: Event type templates pre-fill the session with relevant default tags and suggested note prompts.
+FR-VIS-005: Org-shared sessions: sessions created by any org member are visible to all org members to join; joining adds your scans to it.
+FR-VIS-006: User can switch between sessions mid-event without losing scan history.
+FR-VIS-007: Session can be closed/ended by creator or manager; closed sessions are read-only but fully viewable.
+6.2.2 Visitor Capture Flow
+FR-VIS-010: Camera opens within session context; session name displayed in header during capture.
+FR-VIS-011: After OCR review, user sees optional 'Note about this contact' field.
+FR-VIS-012: Contact is saved and linked to the active session via event_session_id foreign key.
+FR-VIS-013: Session view screen shows all contacts captured in that session as a scrollable list with thumbnails.
+FR-VIS-014: Visitor sessions are not lead-qualified by default (no Hot/Warm/Cold); this is the Exhibitor mode differentiator.
+6.3 Exhibitor Mode
+Exhibitor mode is the highest commercial-value feature in CardVault v3.0. It positions the platform as a direct replacement for physical lead capture devices rented at trade shows (e.g., Swapcard, CompuLead, iLeads) which charge $200–800/event/device.
+6.3.1 Booth Event Session Management
+FR-EXH-001: User taps 'Exhibitor' on home screen to enter Exhibitor mode.
+FR-EXH-002: Create booth event: booth name / event name (required), event type (Trade Show / Conference / Roadshow / Other), date range (multi-day support), team members assigned to booth.
+FR-EXH-003: Multiple team members can be assigned to the same booth session; all scans aggregate under the single booth session.
+FR-EXH-004: Booth session displays real-time scan counter visible to all assigned team members.
+6.3.2 High-Volume Scan & Lead Qualification
+FR-EXH-010: After OCR extraction and review, Exhibitor mode presents the Lead Qualifier screen before saving.
+FR-EXH-011: Lead Qualifier UI: three large tap targets — HOT (red), WARM (amber), COLD (blue) — optimized for one-thumb operation.
+FR-EXH-012: Optional quick note field below qualifier (max 160 characters); voice-to-text supported.
+FR-EXH-013: Lead qualifier rating and note are stored in lead_qualifier (enum) and lead_note (text) fields on the contact record.
+FR-EXH-014: After save, camera immediately reopens for next scan (high-volume mode — no return to home screen between scans).
+FR-EXH-015: Session summary screen shows live: total scans, HOT count, WARM count, COLD count, unqualified count.
+FR-EXH-016: Booth session lead list exportable to CSV segmented by qualifier tier; export available to Manager role+.
+FR-EXH-017: Lead qualifier can be edited post-scan from contact detail screen.
+6.4 Quick Capture Mode
+6.4.1 Encounter Type Tagging
+FR-QC-001: User taps 'Quick Capture' on home screen; no session creation required.
+FR-QC-002: Encounter type selector presented before camera opens: Flight, B2B Meeting, Airport / Transit, Dinner / Social, Referral, Conference Hallway, Other.
+FR-QC-003: Encounter type tag is stored in encounter_type field on contact record.
+FR-QC-004: 'Other' type allows free-text label (max 40 chars).
+FR-QC-005: Encounter type selection defaults to last-used type for repeat users.
+6.4.2 Quick Capture Flow
+FR-QC-010: After OCR review, user sees: encounter type (pre-filled, editable), quick note field (max 200 chars), optional follow-up date selector.
+FR-QC-011: Follow-up date triggers a local notification on the selected date.
+FR-QC-012: Quick Capture contacts are stored in the org-wide contact database with encounter_type and no event_session_id (null session).
+FR-QC-013: Quick Capture contacts are visible in org-wide search; filterable by encounter_type.
+FR-QC-014: Quick Capture mode has no team assignment — all captures are attributed to the individual user.
+6.5 Cross-Event Relationship History
+This feature transforms the duplicate detection problem into a relationship intelligence feature. Instead of asking 'is this a duplicate?', the system asks 'when did you last interact with this person, and in what context?'
+FR-REL-001: When a new scan matches an existing contact (by email, phone, or name+company fuzzy match), the system does NOT immediately prompt for merge.
+FR-REL-002: Instead, the system surfaces a Relationship History card: 'You've met [Name] before — at [Session Name] on [Date], captured by [User Name]'.
+FR-REL-003: User is presented with three options: (a) 'Add new encounter to existing contact'; (b) 'Create separate contact'; (c) 'View existing contact'.
+FR-REL-004: Option (a) 'Add new encounter' appends a new entry to the contact_encounters table with new session, date, qualifier, and note.
+FR-REL-005: Contact detail screen shows full encounter history timeline: date, session name, captured by, mode, qualifier, note.
+FR-REL-006: Encounter history is visible to all org members with access to the contact.
+FR-REL-007: Cross-org relationship history (same person captured by two different org members in different sessions) is surfaced: 'Also met by [Colleague Name] at [Event] on [Date]'.
+6.6 Authentication & Authorization
+CardVault's authentication layer is built on Supabase Auth, leveraging JWT-based session management with tenant-scoped token claims.
+FR-AUTH-001: Users authenticate via email/password with bcrypt hashing (min cost factor 12).
+FR-AUTH-002: JWT access tokens expire after 1 hour; refresh tokens expire after 30 days with rotation on use.
+FR-AUTH-003: All JWTs carry organization_id and role claims; backend middleware validates both on every protected route.
+FR-AUTH-004: Session invalidation propagates within 60 seconds via refresh token revocation.
+FR-AUTH-005: Supabase Row Level Security (RLS) policies enforce organization_id isolation at the database layer.
+FR-AUTH-006: Failed authentication attempts are rate-limited to 5 attempts per 15-minute window per IP.
+FR-AUTH-007: All authentication events are written to the audit_events table.
+FR-AUTH-008: SSO integration via SAML 2.0 / OIDC is a Phase 2 requirement (post-MVP).
+FR-AUTH-009: Event session creation requires Employee role minimum; session deletion requires Manager role.
+FR-AUTH-010: Booth session team assignment is managed by the session creator or Manager role.
+6.7 OCR Processing System
+The OCR pipeline is the core value-creation engine of CardVault. It must be resilient, accurate, and observable.
+FR-OCR-001: Camera integration via React Native Vision Camera with real-time frame preview, auto-focus, and flash control.
+FR-OCR-002: Pre-capture image quality gate: minimum 800x600px resolution; blur detection via Laplacian variance; tilt angle detection.
+FR-OCR-003: Google ML Kit Text Recognition V2 processes captured image on-device for initial field extraction.
+FR-OCR-004: OCR output is parsed by a field classifier that maps extracted text blocks to: full_name, title, company, phone (multiple), email (multiple), address, website, linkedin.
+FR-OCR-005: Each extracted field receives a confidence_score (0.0–1.0). Fields below 0.70 threshold are flagged for manual review.
+FR-OCR-006: If overall extraction confidence (mean of field scores) is below 0.60, the user is prompted to retake or manually enter.
+FR-OCR-007: Up to 3 automatic OCR retries are performed on extraction failure before entering manual correction flow.
+FR-OCR-008: All OCR attempts, confidence scores, and outcomes are persisted to the ocr_jobs table for analytics.
+FR-OCR-009: Manual correction UI presents extracted fields in an editable form with original card image displayed for reference.
+FR-OCR-010: Batch OCR reprocessing is available from the Super Admin dashboard for failed or low-confidence records.
+FR-OCR-011: OCR job record now includes session_id and capture_mode fields for analytics attribution.
+6.8 Business Card Image Storage
+FR-IMG-001: Original full-resolution JPEG image is uploaded to Supabase Storage under org_id/sessions/session_id/contact_id/original.jpg (or org_id/quick/contact_id/ for Quick Capture).
+FR-IMG-002: A compressed thumbnail (max 400x300px, JPEG quality 70) is generated server-side and stored at .../thumbnail.jpg.
+FR-IMG-003: Images are encrypted at rest using AES-256; Supabase Storage enforces access via signed URLs with 1-hour expiry.
+FR-IMG-004: Image metadata (file_size, mime_type, dimensions, storage_path, upload_timestamp, uploader_id) is stored in the card_images table.
+FR-IMG-005: Image retrieval requires valid JWT with matching organization_id claim; cross-tenant image access is prohibited.
+FR-IMG-006: Image retention policy is configurable per organization (default: indefinite; configurable to 12, 24, 36 months).
+FR-IMG-007: Deleted contacts result in image soft-delete with 30-day recovery window; hard deletion purges storage objects.
+FR-IMG-008: Original images support reprocessing: admin can trigger re-OCR from stored original without re-capture.
+6.9 Contact Management
+FR-CON-001: Full CRUD operations on contact records via REST API with field-level validation.
+FR-CON-002: Contact fields: full_name, first_name, last_name, title, company, department, phones[], emails[], address, website, linkedin_url, notes, tags[], captured_by, organization_id, is_verified, capture_mode, event_session_id, encounter_type, lead_qualifier, lead_note, created_at, updated_at.
+FR-CON-003: Duplicate detection runs at point of ingestion using normalized email, phone, and (name + company) fuzzy match with Levenshtein distance threshold of 0.85.
+FR-CON-004: Duplicate candidates trigger the Relationship History flow (FR-REL-001 through FR-REL-007) rather than an immediate merge prompt.
+FR-CON-005: Contact merge preserves all source field values as a versioned history in the contact_merge_history table.
+FR-CON-006: Full-text search across name, company, email, phone, tags using PostgreSQL tsvector with GIN indexing.
+FR-CON-007: Contacts are visible organization-wide to all authenticated members of the same tenant.
+FR-CON-008: Contact history log tracks all field changes with timestamp and actor_id.
+FR-CON-009: Tags support free-form labels and org-defined taxonomy; tags are searchable and filterable.
+FR-CON-010: Bulk export to CSV/JSON for contacts matching a filter set; export events are audit-logged.
+FR-CON-011: Contact list views support filtering by: capture_mode, event_session_id, lead_qualifier, encounter_type, date range.
+FR-CON-012: Contact detail screen shows encounter history timeline (FR-REL-005).
+FR-CON-013: Bulk lead qualifier update from session view (e.g., select 10 contacts, mark all WARM).
+6.10 Multi-Tenant SaaS Architecture
+FR-MT-001: All database tables include organization_id (UUID) as a non-nullable foreign key.
+FR-MT-002: Supabase RLS policies enforce: SELECT/INSERT/UPDATE/DELETE restricted to rows where organization_id = auth.jwt()->>'organization_id'.
+FR-MT-003: Tenant provisioning creates: organization record, default admin user, storage bucket policy, RLS enforcement validation.
+FR-MT-004: Cross-tenant API requests are rejected at the middleware layer with 403 Forbidden before query execution.
+FR-MT-005: Storage bucket paths are namespaced by organization_id; bucket-level policies prevent cross-tenant object access.
+FR-MT-006: Tenant deprovisioning flow: contact data export, 30-day grace period, hard deletion of all tenant data and storage objects.
+FR-MT-007: event_sessions table includes organization_id; RLS policies enforce tenant isolation on all session data.
+6.11 Admin Dashboard
+FR-ADMIN-001: Web-based dashboard built with React + TypeScript, served independently from the mobile application.
+FR-ADMIN-002: Super Admin view: all-tenant KPIs, per-tenant drill-down, system health, OCR pipeline monitoring.
+FR-ADMIN-003: Organization Manager view: org-scoped analytics, user management, export management, duplicate queue.
+FR-ADMIN-004: Audit log browser with full-text search, time range filter, actor filter, and event type filter.
+FR-ADMIN-005: OCR monitoring panel: daily scan volumes, average confidence scores, failure rates, reprocessing queue.
+FR-ADMIN-006: Storage monitoring: per-tenant usage, total platform usage, growth trends, cost estimation.
+FR-ADMIN-007: Duplicate management queue: pending merge decisions, bulk auto-merge for high-confidence duplicates.
+FR-ADMIN-008: User management: invite, deactivate, role change, session invalidation.
+FR-ADMIN-009: Event Sessions panel: list of all org sessions, mode type badge, scan count, date range, creator, status (active/closed), export button.
+FR-ADMIN-010: Lead Funnel panel (Exhibitor sessions only): HOT/WARM/COLD breakdown by session, trend over time.
+FR-ADMIN-011: Encounter Type panel (Quick Capture): breakdown of encounter types across org, time trend.
+FR-ADMIN-012: Relationship History audit: list of cross-event relationship matches surfaced, user decisions (add encounter / create new / view existing).
+6.12 Offline Support
+FR-OFF-001: Business card capture, image storage (local), and OCR processing (on-device) function fully offline — all three modes.
+FR-OFF-002: Offline captures are queued in a local SQLite database with sync_status: pending; includes session_id, capture_mode, lead_qualifier, encounter_type, follow_up_date.
+FR-OFF-003: Background sync triggers on network restoration, WiFi connection, and manual user trigger.
+FR-OFF-004: Sync conflict resolution policy: server-wins for concurrent edits; offline creates are always accepted.
+FR-OFF-005: Sync queue UI displays pending, in-progress, and failed items with retry affordance.
+FR-OFF-006: Maximum offline queue size: 500 pending captures (configurable per org); user is warned at 80% capacity.
+FR-OFF-007: Active event sessions are cached locally; new captures under a session are queued in the local SQLite pending_captures table with session_id reference.
+FR-OFF-008: Session scan counter in offline mode is tracked locally and reconciled on sync.
+FR-OFF-009: Encounter type and lead qualifier values are stored locally; no network required for qualification flow.
+7. Non-Functional Requirements
+NFR Category
+Requirement
+Target / SLA
+Performance
+Contact search API p95 latency
+< 300ms
+Performance
+OCR pipeline end-to-end (capture to saved, all modes)
+< 8 seconds
+Performance
+Exhibitor mode: scan-to-saved with qualifier
+< 25 seconds
+Performance
+Business card image retrieval (signed URL + load)
+< 1.5 seconds
+Performance
+Session view load (up to 500 contacts in session)
+< 1 second
+Performance
+Relationship history lookup (cross-event match)
+< 500ms
+Performance
+Per-event export generation (up to 1,000 contacts)
+< 10 seconds
+Performance
+Admin dashboard initial load
+< 2 seconds
+Scalability
+Contacts per tenant without query degradation
+10M+ records
+Scalability
+Event sessions per organization
+Unlimited
+Scalability
+Contacts per event session
+Up to 50,000
+Scalability
+Concurrent booth team members scanning
+Up to 20 per session
+Scalability
+Concurrent API requests (platform-wide)
+5,000+ concurrent
+Scalability
+Image storage capacity (per tenant)
+Unlimited (tiered billing)
+Availability
+Backend API uptime SLA
+>= 99.9% monthly
+Availability
+Supabase managed PostgreSQL uptime
+>= 99.95%
+Reliability
+Data durability (PostgreSQL + Storage replication)
+>= 99.999%
+Security
+Data encryption at rest
+AES-256
+Security
+Data encryption in transit
+TLS 1.3 minimum
+Security
+JWT token signing algorithm
+RS256 (asymmetric)
+Maintainability
+Backend test coverage
+>= 80% unit + integration
+Maintainability
+API backward compatibility window
+2 major versions
+Observability
+Error detection-to-alert latency
+< 5 minutes
+Disaster Recovery
+RTO (Recovery Time Objective)
+< 4 hours
+Disaster Recovery
+RPO (Recovery Point Objective)
+< 1 hour
+Cost
+Storage cost optimization via compression
+>= 60% reduction vs raw
+8. System Architecture Overview
+CardVault employs a multi-tier, multi-tenant SaaS architecture with clear separation between the client tier, API tier, service tier, and data tier. v3.0 retains the multi-tier foundation from v1.0 with additive changes for context-aware capture.
+8.1 Architecture Diagram
+CLIENT TIER
+┌─────────────────────────────────────────────────────────────────┐
+│  React Native App (Android APK)         Admin Dashboard         │
+│  ┌───────────┬─────────┬────────┐       React / TypeScript      │
+│  │ Visitor   │Exhibitor│ Quick  │       Event Sessions Panel    │
+│  │  Mode     │  Mode   │Capture │       Lead Funnel Panel       │
+│  └───────────┴─────────┴────────┘       Encounter Analytics     │
+│  Google ML Kit OCR · Zustand State Mgmt                         │
+│  SQLite Offline Queue (session_id, lead_qualifier, enc_type)    │
+└──────────────────────────┬──────────────────────────────────────┘
+│ HTTPS / TLS 1.3 / JWT RS256
+API GATEWAY / REVERSE PROXY (Rate Limiting · Auth Middleware · CORS)
+SERVICE TIER (NestJS / Node.js 20 LTS)
+┌─────────────────────────────────────────────────────────────────┐
+│  Sessions  │ Encounters │ Relationship │ Qualifier  │ Contacts  │
+│  Module    │ Module     │ History Mod. │ Module     │ Module    │
+│  OCR Mod.  │ Images Mod.│ Analytics   │ Admin Mod. │ Auth Mod. │
+│  Export    │ Users Mod. │ Orgs Mod.   │ Health Mod.│           │
+│            BullMQ Job Queue                                      │
+│  ocr-processing · deduplication · image-processing              │
+│  export-generation · sync-ingest · audit-writes                 │
+│  relationship-matching · session-counter-sync                   │
+└──────────────────┬──────────────────────┬───────────────────────┘
+│                      │
+DATA TIER     │          STORAGE TIER│
+Supabase PG 15   │       Supabase Storage (S3-compatible)
+Row Level Sec.   │       business_cards/{org}/
+PgBouncer        │         sessions/{session_id}/{contact_id}/
+Connection Pool  │           original.jpg · thumbnail.jpg
+│         quick/{contact_id}/original.jpg
+│         legacy/{contact_id}/original.jpg
+│       CDN-backed signed URLs · AES-256
+9. Technical Architecture
+9.1 Technology Stack
+Layer
+Technology
+Notes
+Mobile Application
+React Native 0.74+
+New screens: context selection, session management, qualifier UI, encounter tagger, relationship history card
+State Management
+Zustand 4.x
+New stores: sessionStore, encounterStore, relationshipStore
+OCR Engine
+Google ML Kit Text Recognition V2
+On-device processing; OCR job now carries session_id and capture_mode metadata
+Backend Framework
+NestJS (Node.js 20 LTS)
+New modules: Sessions, RelationshipHistory, Encounters, Qualifier
+API Layer
+REST + Supabase Realtime
+RESTful for transactional operations; Realtime for dashboard live updates
+Database
+PostgreSQL 15 via Supabase
+Additive schema changes — event_sessions, contact_encounters, session_members
+Authentication
+Supabase Auth + JWT RS256
+Unchanged from v1.0
+File Storage
+Supabase Storage
+Storage path updated to include session_id
+Job Queue
+BullMQ + Redis (Upstash)
+New queues: relationship-matching, session-counter-sync
+Caching
+Redis (Upstash Serverless)
+Session data cached for fast counter updates
+Monitoring
+Sentry + Datadog
+Error tracking + APM + infrastructure monitoring
+Admin Dashboard
+React 18 + TypeScript + Tailwind
+New panels: Event Sessions, Lead Funnel, Encounter Analytics
+CI/CD
+GitHub Actions + Docker
+Automated testing; containerized deployments; environment parity
+10. Node.js Backend Architecture
+RECOMMENDATION: NestJS is the mandated backend framework for CardVault. Express.js is explicitly rejected for this use case. NestJS module architecture enforces separation of concerns, built-in DI container enables testable services, TypeScript-first design reduces runtime errors, and native BullMQ integration simplifies queue management.
+10.1 Module Structure
+src/
+├── modules/
+│   ├── auth/              # JWT validation, session, token management
+│   ├── contacts/          # Contact CRUD, deduplication, search, merge
+│   ├── ocr/               # OCR job submission, parsing, confidence scoring
+│   ├── images/            # Upload, signed URL generation, thumbnail, metadata
+│   ├── organizations/     # Tenant CRUD, provisioning, deprovisioning
+│   ├── users/             # User management, role assignment, invitation
+│   ├── sessions/          # [v3.0] Event session CRUD, team mgmt, counters
+│   ├── encounters/        # [v3.0] Contact encounter history management
+│   ├── relationship/      # [v3.0] Cross-event relationship matching engine
+│   ├── qualifier/         # [v3.0] Lead qualifier read/write for Exhibitor mode
+│   ├── analytics/         # Updated: per-session analytics, lead funnel
+│   ├── admin/             # Updated: event session admin panel
+│   ├── export/            # Updated: per-session CSV export with qualifier filter
+│   └── health/            # Health check endpoints for load balancer probes
+├── common/
+│   ├── guards/            # JwtAuthGuard, RolesGuard, TenantGuard
+│   ├── interceptors/      # LoggingInterceptor, TransformInterceptor
+│   ├── filters/           # GlobalExceptionFilter, HttpExceptionFilter
+│   ├── pipes/             # ValidationPipe (class-validator), ParseUUIDPipe
+│   ├── decorators/        # @CurrentUser(), @OrgId(), @Roles()
+│   └── middleware/        # TenantContextMiddleware, CorrelationIdMiddleware
+├── config/                # ConfigModule, environment validation (Joi)
+├── database/              # Supabase client factory, connection management
+└── queue/                 # BullMQ queue definitions, processors, schedulers
+10.2 Middleware & Guard Pipeline
+Every inbound API request traverses the following pipeline in order: CorrelationIdMiddleware → TenantContextMiddleware → JwtAuthGuard → TenantGuard → RolesGuard → ValidationPipe → LoggingInterceptor → TransformInterceptor.
+10.3 Job Queue Architecture (BullMQ)
+Queue Name
+Jobs
+Concurrency
+Retry Policy
+ocr-processing
+OCR retry jobs, batch reprocessing requests
+5 workers
+3 retries, exponential backoff
+deduplication
+Post-ingest duplicate scoring jobs
+3 workers
+2 retries, fixed 5s delay
+image-processing
+Thumbnail generation, compression
+4 workers
+2 retries, fixed 3s delay
+export-generation
+CSV/JSON export; supports per-session with qualifier filter
+2 workers
+1 retry, 30s delay
+sync-ingest
+Offline queue batch ingestion
+8 workers
+3 retries, exponential backoff
+audit-writes
+Async audit event persistence
+2 workers
+5 retries, fixed 2s delay
+relationship-matching
+Post-ingest relationship lookup for all new contacts
+5 workers
+2 retries, fixed 3s delay
+session-counter-sync
+Reconcile offline scan counters on sync
+3 workers
+3 retries, exponential backoff
+10.4 Rate Limiting Strategy
+Global rate limit: 1,000 requests per 15 minutes per authenticated user.
+OCR submission endpoint: 30 requests per minute per user.
+Image upload endpoint: 20 requests per minute per user.
+Export endpoint: 5 requests per hour per user.
+Rate limit state stored in Redis (Upstash) for distributed enforcement across horizontal scale.
+429 responses include Retry-After header.
+10.5 API Versioning
+API versioning follows URI path versioning: /api/v1/. Deprecation policy: minimum 12-month support window for retired versions with documented migration path. Breaking changes require a major version increment.
+10.6 Error Handling Architecture
+All exceptions are caught by GlobalExceptionFilter and normalized to a standard error response envelope with status, code, message, correlationId, and timestamp fields. HTTP status codes follow RFC 7231. Custom application error codes (e.g., OCR_CONFIDENCE_TOO_LOW, DUPLICATE_CONTACT_DETECTED, SESSION_CLOSED) are surfaced in the code field for client-side handling.
+11. Database Design
+11.1 Schema Overview
+CardVault's PostgreSQL schema is organized around six functional domains: Identity & Tenancy, Contact Management, Event Sessions & Encounters, OCR Processing, Image Storage, and Audit & Compliance. All tables use UUID v4 primary keys, created_at/updated_at timestamps, organization_id foreign keys, and soft deletes via deleted_at.
+v3.0 adds three new tables (event_sessions, session_members, contact_encounters) and four new columns to the contacts table. All v1.0 tables are unchanged in structure — changes are fully additive and backward-compatible.
+11.2 Core Schema — Identity & Tenancy
+CREATE TABLE organizations (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+name            TEXT NOT NULL,
+slug            TEXT NOT NULL UNIQUE,
+plan            TEXT NOT NULL DEFAULT 'standard',
+settings        JSONB NOT NULL DEFAULT '{}',
+max_users       INTEGER NOT NULL DEFAULT 100,
+storage_quota_gb DECIMAL(10,2) DEFAULT 50.00,
+is_active       BOOLEAN NOT NULL DEFAULT true,
+created_at      TIMESTAMPTZ DEFAULT NOW(),
+updated_at      TIMESTAMPTZ DEFAULT NOW(),
+deleted_at      TIMESTAMPTZ
+);
+CREATE TABLE users (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+supabase_uid    UUID NOT NULL UNIQUE,
+email           TEXT NOT NULL,
+full_name       TEXT,
+role            TEXT NOT NULL CHECK (role IN ('employee','manager','super_admin')),
+is_active       BOOLEAN NOT NULL DEFAULT true,
+last_login_at   TIMESTAMPTZ,
+created_at      TIMESTAMPTZ DEFAULT NOW(),
+updated_at      TIMESTAMPTZ DEFAULT NOW(),
+deleted_at      TIMESTAMPTZ
+);
+CREATE INDEX idx_users_org ON users(organization_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_users_email_org ON users(email, organization_id);
+11.3 Core Schema — Contacts
+CREATE TABLE contacts (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+captured_by     UUID NOT NULL REFERENCES users(id),
+first_name      TEXT,
+last_name       TEXT,
+full_name       TEXT NOT NULL,
+title           TEXT,
+company         TEXT,
+department      TEXT,
+emails          TEXT[] DEFAULT '{}',
+phones          TEXT[] DEFAULT '{}',
+address         TEXT,
+website         TEXT,
+linkedin_url    TEXT,
+notes           TEXT,
+tags            TEXT[] DEFAULT '{}',
+is_verified     BOOLEAN DEFAULT false,
+ocr_job_id      UUID REFERENCES ocr_jobs(id),
+card_image_id   UUID REFERENCES card_images(id),
+-- v3.0 additions (nullable for backward compatibility)
+capture_mode    TEXT CHECK (capture_mode IN ('visitor','exhibitor','quick_capture','legacy')),
+event_session_id UUID REFERENCES event_sessions(id) ON DELETE SET NULL,
+encounter_type  TEXT,
+lead_qualifier  TEXT CHECK (lead_qualifier IN ('hot','warm','cold')),
+search_vector   TSVECTOR GENERATED ALWAYS AS (
+to_tsvector('english',
+coalesce(full_name,'') || ' ' || coalesce(company,'') ||
+' ' || coalesce(title,'') || ' ' || array_to_string(emails,' ') ||
+' ' || array_to_string(tags,' ')
+)
+) STORED,
+created_at      TIMESTAMPTZ DEFAULT NOW(),
+updated_at      TIMESTAMPTZ DEFAULT NOW(),
+deleted_at      TIMESTAMPTZ
+);
+CREATE INDEX idx_contacts_org ON contacts(organization_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_contacts_search ON contacts USING GIN(search_vector);
+CREATE INDEX idx_contacts_emails ON contacts USING GIN(emails);
+CREATE INDEX idx_contacts_company ON contacts(organization_id, company);
+CREATE INDEX idx_contacts_session ON contacts(event_session_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_contacts_mode ON contacts(organization_id, capture_mode) WHERE deleted_at IS NULL;
+CREATE INDEX idx_contacts_qualifier ON contacts(event_session_id, lead_qualifier) WHERE deleted_at IS NULL;
+11.4 New Table — event_sessions
+CREATE TABLE event_sessions (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+created_by      UUID NOT NULL REFERENCES users(id),
+name            TEXT NOT NULL,
+mode            TEXT NOT NULL CHECK (mode IN ('visitor','exhibitor','quick_capture')),
+event_type      TEXT,  -- 'trade_show','conference','product_demo','networking','other'
+location        TEXT,
+start_date      DATE NOT NULL DEFAULT CURRENT_DATE,
+end_date        DATE,
+status          TEXT NOT NULL DEFAULT 'active'
+CHECK (status IN ('active','closed','archived')),
+scan_count      INTEGER NOT NULL DEFAULT 0,
+hot_count       INTEGER NOT NULL DEFAULT 0,
+warm_count      INTEGER NOT NULL DEFAULT 0,
+cold_count      INTEGER NOT NULL DEFAULT 0,
+settings        JSONB NOT NULL DEFAULT '{}',
+created_at      TIMESTAMPTZ DEFAULT NOW(),
+updated_at      TIMESTAMPTZ DEFAULT NOW(),
+deleted_at      TIMESTAMPTZ
+);
+CREATE INDEX idx_sessions_org ON event_sessions(organization_id, status);
+CREATE INDEX idx_sessions_mode ON event_sessions(organization_id, mode, start_date);
+11.5 New Table — session_members
+CREATE TABLE session_members (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+session_id      UUID NOT NULL REFERENCES event_sessions(id) ON DELETE CASCADE,
+user_id         UUID NOT NULL REFERENCES users(id),
+organization_id UUID NOT NULL REFERENCES organizations(id),
+joined_at       TIMESTAMPTZ DEFAULT NOW(),
+UNIQUE(session_id, user_id)
+);
+11.6 New Table — contact_encounters
+CREATE TABLE contact_encounters (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+contact_id      UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+organization_id UUID NOT NULL REFERENCES organizations(id),
+session_id      UUID REFERENCES event_sessions(id),
+captured_by     UUID NOT NULL REFERENCES users(id),
+capture_mode    TEXT NOT NULL CHECK (capture_mode IN ('visitor','exhibitor','quick_capture','legacy')),
+encounter_type  TEXT,  -- for quick_capture: 'flight','b2b','airport','dinner','referral','hallway','other'
+encounter_label TEXT,  -- free-text label when encounter_type = 'other'
+lead_qualifier  TEXT CHECK (lead_qualifier IN ('hot','warm','cold')),
+lead_note       TEXT,
+follow_up_date  DATE,
+card_image_id   UUID REFERENCES card_images(id),
+ocr_job_id      UUID REFERENCES ocr_jobs(id),
+notes           TEXT,
+created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_encounters_contact ON contact_encounters(contact_id, created_at DESC);
+CREATE INDEX idx_encounters_session ON contact_encounters(session_id);
+CREATE INDEX idx_encounters_org ON contact_encounters(organization_id, capture_mode);
+11.7 Supporting Tables — OCR, Images, Audit
+CREATE TABLE ocr_jobs (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+organization_id UUID NOT NULL REFERENCES organizations(id),
+user_id         UUID NOT NULL REFERENCES users(id),
+card_image_id   UUID REFERENCES card_images(id),
+status          TEXT NOT NULL DEFAULT 'pending'
+CHECK (status IN ('pending','processing','complete','failed','manual_review')),
+ocr_engine      TEXT DEFAULT 'google_ml_kit_v2',
+raw_text        TEXT,
+extracted_fields JSONB,
+confidence_scores JSONB,
+mean_confidence DECIMAL(4,3),
+attempt_count   INTEGER DEFAULT 0,
+session_id      UUID REFERENCES event_sessions(id),  -- v3.0 addition
+capture_mode    TEXT,                                 -- v3.0 addition
+error_message   TEXT,
+processing_ms   INTEGER,
+created_at      TIMESTAMPTZ DEFAULT NOW(),
+completed_at    TIMESTAMPTZ
+);
+CREATE TABLE audit_events (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+organization_id UUID REFERENCES organizations(id),
+actor_id        UUID REFERENCES users(id),
+actor_email     TEXT,
+event_type      TEXT NOT NULL,
+entity_type     TEXT,
+entity_id       UUID,
+event_data      JSONB DEFAULT '{}',
+ip_address      INET,
+user_agent      TEXT,
+correlation_id  TEXT,
+created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+-- audit_events is append-only. No UPDATE or DELETE RLS is granted.
+11.8 Indexing Strategy
+Table
+Index
+Type
+Purpose
+contacts
+search_vector
+GIN
+Full-text search across name, company, email, tags
+contacts
+(org_id, company)
+B-Tree
+Company-filtered searches
+contacts
+emails (array)
+GIN
+Email lookups for deduplication
+contacts
+(org_id, lead_qualifier)
+B-Tree
+Lead funnel filtering and export
+contacts
+(org_id, capture_mode)
+B-Tree
+Mode-based analytics queries
+event_sessions
+(org_id, status)
+B-Tree
+Admin session list queries
+event_sessions
+(org_id, mode, start_date)
+B-Tree
+Mode-filtered session analytics
+contact_encounters
+(contact_id, created_at DESC)
+B-Tree
+Relationship history timeline load
+contact_encounters
+(session_id)
+B-Tree
+Session contact list queries
+ocr_jobs
+(org_id, status)
+B-Tree
+Admin queue monitoring
+ocr_jobs
+(org_id, mean_confidence)
+B-Tree
+Quality analytics queries
+audit_events
+(org_id, created_at DESC)
+B-Tree
+Audit log time-range queries
+users
+(email, org_id)
+B-Tree UNIQUE
+Login lookups, uniqueness enforcement
+12. Storage Architecture
+12.1 Supabase Storage Organization
+Bucket: cardvault-images  (private, org-namespaced)
+Path Structure:
+{organization_id}/
+sessions/
+{session_id}/
+{contact_id}/
+original.jpg       — Full-resolution original (max 5MB post-compression)
+thumbnail.jpg      — Resized 400x300px, quality 70 (avg 15–40KB)
+quick/                   — Quick Capture (no session)
+{contact_id}/
+original.jpg
+thumbnail.jpg
+legacy/                  — v1.0 captures (auto-migrated path)
+{contact_id}/
+original.jpg
+thumbnail.jpg
+12.2 Image Upload Lifecycle
+Mobile app captures image; pre-validation checks resolution (min 800x600) and blur (Laplacian variance > 100).
+Client compresses JPEG to quality 85 using react-native-image-manipulator before upload.
+Client requests a signed upload URL from the backend: POST /api/v1/images/upload-url.
+Backend validates JWT, creates card_images record with status=pending, generates Supabase Storage signed upload URL (5-minute TTL).
+Client uploads directly to Supabase Storage via signed URL (bypasses backend for bandwidth efficiency).
+On upload completion, backend image processor queue job: validates file integrity, generates thumbnail, extracts EXIF metadata, updates card_images record to status=complete.
+OCR job is enqueued for processing against the confirmed image.
+12.3 Retention & Lifecycle Policy
+Event
+Action
+Timing
+Contact soft-deleted
+Image marked for retention
+Immediate
+Contact hard-deleted
+Storage objects deleted; card_images record purged
+30-day grace + confirmed delete
+Session archived
+Images moved to cold storage tier; access via signed URL still works
+On status change
+Session hard-deleted by Super Admin
+All session images purged
+After 30-day grace period
+Organization deprovisioned
+All org storage objects deleted; 7-day export window
+After 30-day grace period
+Retention policy expiry
+Automated deletion job scans expired images
+Nightly batch job
+Storage quota exceeded
+Upload requests rejected; admin alert triggered
+Real-time
+13. RBAC Permission Matrix
+13.1 Role Definitions
+employee: Standard sales user. Can capture, view, edit, and search contacts within their organization.
+manager: Organization-level administrator. Inherits employee permissions plus user management, event session management, and export controls.
+super_admin: Platform operator. Full access across all tenants. Cannot be assigned at the organization level.
+13.2 Permission Matrix
+Resource / Action
+Employee
+Manager
+Super Admin
+Contacts — Create
+Own org only
+Own org only
+Any org
+Contacts — Read
+Own org only
+Own org only
+Any org
+Contacts — Update
+Own org only
+Own org only
+Any org
+Contacts — Delete (soft)
+Own contacts only
+Own org only
+Any org
+Contacts — Export
+No
+Own org only
+Any org
+Contacts — Merge
+Own contacts only
+Own org only
+Any org
+Card Images — Upload/View
+Own org only
+Own org only
+Any org
+Card Images — Delete
+Own uploads only
+Own org only
+Any org
+Event Sessions — Create
+Own org only
+Own org only
+Any org
+Event Sessions — Join
+Own org only
+Own org only
+Any org
+Event Sessions — Close
+Session creator only
+Own org only
+Any org
+Event Sessions — Delete
+No
+Own org only
+Any org
+Event Sessions — Add Team Member
+Session creator only
+Own org only
+Any org
+Lead Qualifier — Set / Edit
+Own captures only
+Own org only
+Any org
+Lead Qualifier — Bulk Update
+No
+Own org only
+Any org
+Encounter Type — Set / Edit
+Own captures only
+Own org only
+Any org
+Relationship History — View
+Own org only
+Own org only
+Any org
+Session Export (CSV)
+No
+Own org only
+Any org
+Per-Session Analytics
+Own sessions only
+Own org only
+Any org
+Lead Funnel Dashboard
+No
+Own org only
+Any org
+Users — Invite / Deactivate
+No
+Own org only
+Any org
+Users — Role Change
+No
+No
+Any org
+Organizations — Create / Delete
+No
+No
+Yes
+OCR Jobs — View / Reprocess
+Own jobs only
+Own org only
+Any org
+Analytics — Org Level
+No
+Own org only
+Any org
+Analytics — Platform Level
+No
+No
+Yes
+Audit Logs — View
+No
+Own org only
+Any org
+Admin Dashboard
+No
+Own org only
+Full access
+14. OCR Processing Workflow
+14.1 End-to-End OCR Pipeline
+PRE-CAPTURE VALIDATION: Real-time blur detection (Laplacian variance threshold > 100); minimum frame resolution 800x600px; card boundary detection via ML Kit Object Detection API.
+IMAGE CAPTURE & PREPROCESSING: Capture full-resolution JPEG; apply contrast normalization, deskewing, noise reduction; compress to JPEG quality 85.
+ON-DEVICE OCR EXECUTION: Google ML Kit Text Recognition V2 processes image; returns TextBlocks with bounding boxes and confidence scores.
+FIELD CLASSIFICATION: Regex + heuristic rules classify text blocks to field types. Email: RFC 5322 compliant regex. Phone: E.164 normalization with libphonenumber-js. Name heuristic: proper-case two-word patterns in header position.
+CONFIDENCE EVALUATION: Per-field confidence computed from ML Kit confidence + classification certainty. Mean confidence < 0.60: trigger retry (up to 3 attempts). Per-field confidence < 0.70: flag field for manual review.
+MODE-SPECIFIC POST-OCR SCREEN: Visitor mode: standard review form + optional note. Exhibitor mode: review form + mandatory Lead Qualifier (Hot/Warm/Cold) + optional 160-char note. Quick Capture mode: review form + encounter type + optional 200-char note + optional follow-up date.
+BACKEND SUBMISSION — POST /api/v1/ocr/submit: Extended payload includes capture_mode, session_id, lead_qualifier, lead_note, encounter_type, encounter_label, follow_up_date.
+RELATIONSHIP HISTORY CHECK: relationship-matching queue job runs immediately post-ingest. If match found: push notification to mobile client with relationship history card. User chooses: Add encounter / Create new / View existing.
+CONTACT RECORD CREATION / ENCOUNTER APPEND: Contact and contact_encounters records written; session scan_count incremented; analytics events fired.
+14.2 OCR Failure Handling Strategy
+Failure Scenario
+Detection Method
+Response Action
+Blurry/Low-res image
+Laplacian variance < 100 pre-capture
+Block capture; prompt user to retake
+Low overall OCR confidence
+mean_confidence < 0.60 post-extraction
+Trigger up to 3 retries; escalate to manual review
+Individual field low confidence
+field_confidence < 0.70
+Flag field in edit UI; original image shown for reference
+Complete extraction failure
+OCR engine returns empty TextBlocks
+Status: manual_review; present blank form with image
+Network failure during upload
+HTTP error or timeout on upload URL
+Queue for offline retry; notify user of pending sync
+Corrupted image file
+MIME type mismatch or file integrity check failure
+Reject upload; prompt recapture; log error event
+Backend OCR job timeout
+Job exceeds 30s processing window
+Job marked failed; requeue once; dead-letter after 3 failures
+15. API Architecture
+15.1 Full API Endpoint Taxonomy
+Module
+Endpoint
+Method
+Auth
+Role
+Auth
+/api/v1/auth/login
+POST
+No
+Public
+Auth
+/api/v1/auth/refresh
+POST
+Refresh token
+Public
+Auth
+/api/v1/auth/logout
+POST
+Yes
+Any
+Contacts
+/api/v1/contacts
+GET/POST
+Yes
+Employee+
+Contacts
+/api/v1/contacts/:id
+GET/PUT/DELETE
+Yes
+Employee+
+Contacts
+/api/v1/contacts/search
+GET
+Yes
+Employee+
+Contacts
+/api/v1/contacts/export
+POST
+Yes
+Manager+
+Contacts
+/api/v1/contacts/:id/merge
+POST
+Yes
+Employee+
+Contacts
+/api/v1/contacts/:id/encounters
+GET
+Yes
+Employee+
+Sessions
+POST /api/v1/sessions
+POST
+Yes
+Employee+
+Sessions
+GET /api/v1/sessions
+GET
+Yes
+Employee+
+Sessions
+GET /api/v1/sessions/:id
+GET
+Yes
+Employee+
+Sessions
+PATCH /api/v1/sessions/:id
+PATCH
+Yes
+Employee+
+Sessions
+POST /api/v1/sessions/:id/close
+POST
+Yes
+Employee+
+Sessions
+POST /api/v1/sessions/:id/join
+POST
+Yes
+Employee+
+Sessions
+POST /api/v1/sessions/:id/members
+POST
+Yes
+Employee+
+Sessions
+GET /api/v1/sessions/:id/stats
+GET
+Yes
+Employee+
+Sessions
+POST /api/v1/sessions/:id/export
+POST
+Yes
+Manager+
+Encounters
+PATCH /api/v1/encounters/:id
+PATCH
+Yes
+Employee+
+Relationship
+POST /api/v1/relationship/match
+POST
+Yes
+Employee+
+OCR
+/api/v1/ocr/submit
+POST
+Yes
+Employee+
+OCR
+/api/v1/ocr/jobs/:id
+GET
+Yes
+Employee+
+OCR
+/api/v1/ocr/reprocess/:id
+POST
+Yes
+Manager+
+Images
+/api/v1/images/upload-url
+POST
+Yes
+Employee+
+Images
+/api/v1/images/:id/confirm
+POST
+Yes
+Employee+
+Images
+/api/v1/images/:id/url
+GET
+Yes
+Employee+
+Users
+/api/v1/users
+GET
+Yes
+Manager+
+Users
+/api/v1/users/invite
+POST
+Yes
+Manager+
+Users
+/api/v1/users/:id/deactivate
+POST
+Yes
+Manager+
+Analytics
+/api/v1/analytics/org
+GET
+Yes
+Manager+
+Analytics
+/api/v1/analytics/platform
+GET
+Yes
+Super Admin
+Analytics
+/api/v1/analytics/sessions
+GET
+Yes
+Manager+
+Analytics
+/api/v1/analytics/lead-funnel
+GET
+Yes
+Manager+
+Analytics
+/api/v1/analytics/encounter-types
+GET
+Yes
+Manager+
+Admin
+/api/v1/admin/organizations
+GET/POST
+Yes
+Super Admin
+Admin
+/api/v1/admin/audit-logs
+GET
+Yes
+Manager+
+Health
+/api/v1/health
+GET
+No
+Public
+16. Security Architecture
+16.1 Defense-in-Depth Model
+Transport Security
+TLS 1.3 enforced on all client-server communications; TLS 1.2 minimum fallback.
+HSTS headers enforced with 1-year max-age.
+Certificate pinning implemented in React Native application for API domain.
+All Supabase Storage signed URLs served over HTTPS only.
+Authentication Security
+RS256 asymmetric JWT signing; private key stored in environment secrets manager.
+JWT claims include: sub (user_id), org (organization_id), role, iat, exp, jti.
+Token revocation via jti blocklist stored in Redis with TTL matching token expiry.
+Refresh token rotation: every use issues a new refresh token; previous is immediately invalidated.
+Data Security
+PostgreSQL data encrypted at rest (AES-256) via Supabase managed encryption.
+Business card images encrypted at rest in Supabase Storage.
+PII fields (emails, phones) are not indexed in plaintext in any secondary search index.
+Lead qualifier ratings (Hot/Warm/Cold) are treated as commercially sensitive data; export endpoints require Manager role and generate a full audit event.
+Application Security
+All API inputs validated via class-validator DTOs before reaching service layer.
+SQL injection prevention: Supabase JS client uses parameterized queries exclusively.
+XSS prevention: admin dashboard uses React with no dangerouslySetInnerHTML usage.
+CSRF protection via SameSite=Strict cookies and Origin header validation.
+Dependency vulnerability scanning via npm audit in CI pipeline; CRITICAL severity blocks deployment.
+v3.0 Security Additions
+Session Isolation: Event sessions are tenant-scoped via organization_id; RLS policies enforce isolation at the database layer.
+Session Member Access: Only users in the session_members table (or Manager/Super Admin) can add contacts to a closed session or view Exhibitor lead exports.
+Encounter Note Privacy: Lead notes and encounter notes stored as plain text in PostgreSQL; subject to the same AES-256 encryption at rest as all PII fields.
+Follow-up Date Notifications: Generated as local device notifications only; no notification content transmitted to third-party push services without explicit opt-in.
+Relationship History Access: Cross-org relationship history visible only within the same tenant; contact data from other tenants is never surfaced.
+Compliance Controls
+Immutable audit trail for all data access and modification events.
+Data retention policies configurable per organization for GDPR Article 17 compliance.
+Right-to-erasure workflow: contact deletion triggers image deletion and audit log flagging.
+Export access logged with actor identity, timestamp, filter criteria, qualifier filter, and record count.
+17. Admin Dashboard Requirements
+17.1 Super Admin Dashboard
+Platform Overview Panel
+Total tenants (active / inactive); tenant growth trend (30/90 day).
+Platform-wide OCR job volume; mean confidence score; failure rate.
+Total contacts across all tenants; growth rate.
+Storage utilization: total bytes used, per-tenant breakdown, cost projection.
+Active sessions; DAU/MAU metrics.
+System health indicators: API error rate, p95 latency, queue depth.
+OCR Monitoring Panel
+Daily scan volume chart (line chart, 30-day window).
+Confidence score distribution histogram.
+Failure rate by org; by device type; by time of day.
+Pending reprocessing queue with priority management.
+Duplicate Management Center
+Organization-level duplicate candidate queue with confidence scores.
+Bulk auto-merge control for high-confidence (>= 0.95) candidates with confirmation gate.
+Merge history log with actor, timestamp, and field-level diff.
+Relationship History Panel (Super Admin)
+Log of all cross-event relationship matches surfaced to users.
+Columns: matched contact name, original session, new session, match confidence, user decision, timestamp.
+Filter by decision type; useful for tuning match confidence thresholds.
+17.2 Organization Manager Dashboard
+Team contact acquisition metrics: total contacts, weekly/monthly trend, per-user breakdown.
+Event Sessions panel: list of all org sessions, mode type badge, scan count, date range, creator, status, export button.
+Lead Funnel panel (Exhibitor sessions only): HOT/WARM/COLD breakdown by session, trend over time, top sessions by Hot count.
+Encounter Type analytics panel: pie/bar chart of encounter types; time trend for Quick Capture volume.
+User management table: invite, deactivate, role change, last active.
+Export management: create filtered export (by session, qualifier, date), download history, export size tracking.
+Duplicate queue: organization-scoped candidates requiring resolution.
+Organization audit log: filtered view of own organization's events.
+Storage usage: current usage, quota, image count, per-session storage.
+18. Mobile Application Requirements
+18.1 Platform Requirements
+Target: Android 10+ (API 29+). APK distributed via internal MDM (e.g., VMware Workspace ONE, Microsoft Intune).
+Minimum device spec: 3GB RAM, 64-bit processor, rear camera minimum 8MP autofocus.
+Google ML Kit models bundled in APK (no runtime download dependency for OCR).
+APK signing: enterprise keystore; not distributed via public Play Store.
+18.2 Screen Architecture
+Screen
+Mode
+Purpose
+Key Components
+Context Home
+All
+Mode selection + recent contacts
+3 mode cards (Visitor/Exhibitor/Quick Capture); active session indicator; recent contacts feed; global search bar
+Session Create
+Visitor / Exhibitor
+Create named event session
+Event name; event type template picker; date; location (GPS-assisted); team assignment (Exhibitor only)
+Session Browser
+Visitor
+Browse + join org sessions
+List of active org sessions; scan count; join button
+Encounter Tagger
+Quick Capture
+Select encounter type before camera
+7 encounter type tiles; free-text for 'Other'; defaults to last-used type
+Camera Capture
+All
+Card image capture
+Vision Camera preview; quality indicators; capture button; session name in header
+OCR Review — Visitor
+Visitor
+Review extracted fields + optional note
+Editable form; card image thumbnail; confidence indicators
+OCR Review — Exhibitor
+Exhibitor
+Review + qualify lead
+Editable form; HOT/WARM/COLD qualifier buttons (large); 160-char note; auto-advance to next scan
+OCR Review — Quick Capture
+Quick Capture
+Review + tag encounter
+Editable form; encounter type (pre-filled, editable); 200-char note; follow-up date picker
+Relationship History
+All
+Handle returning contact
+Previous encounter card: session name, date, captured by; options: Add Encounter / Create New / View Existing
+Session View
+Visitor / Exhibitor
+View all contacts in session
+Contact list with thumbnails; session stats bar; filter by qualifier; export button (Manager)
+Contact Detail
+All
+Full contact record
+All fields; encounter history timeline; card image viewer; edit/delete; add note
+Contact Search
+All
+Full-text search across org contacts
+Search input; filter chips (mode, session, qualifier, encounter type); result list
+Sync Status
+All
+Offline queue visibility
+Pending captures list; sync progress; session counter reconciliation status; retry affordance
+Settings
+All
+User profile; app preferences
+Profile edit; notification preferences; logout
+18.3 Zustand Store Structure
+stores/
+├── authStore.ts         — JWT tokens, user profile, session expiry
+├── contactsStore.ts     — Contact list cache, search results, pagination
+├── captureStore.ts      — Active capture state, OCR progress, review data
+├── sessionStore.ts      — Active sessions per mode, session list cache
+│                          activeVisitorSession, activeExhibitorSession
+│                          sessionContacts, sessionStats
+├── encounterStore.ts    — Current encounter type selection, follow-up dates
+│                          selectedEncounterType, leadQualifier, quickNote
+├── relationshipStore.ts — Relationship match results, user decision state
+├── syncStore.ts         — Offline queue, sync status (session_id on items)
+└── uiStore.ts           — Loading states, modals, navigation state
+18.4 Exhibitor Mode UX Detail
+The Exhibitor mode Lead Qualifier screen is the highest-priority UX component in v3.0. Design requirements:
+Three large tap targets occupy 80% of screen height — optimized for one-thumb, eyes-diverted operation in a busy booth environment.
+HOT button: high-contrast red background, fire emoji or upward arrow icon, haptic feedback on tap.
+WARM button: amber background, wave/hand emoji, haptic feedback.
+COLD button: blue background, snowflake or neutral emoji, haptic feedback.
+After qualifier tap, note field slides up with keyboard auto-focused — 2 seconds to add context before auto-advancing.
+If no note entered in 3 seconds: contact saves automatically and camera reopens (pure speed mode).
+Speed mode can be toggled off by user for slower, more deliberate qualification flow.
+19. Offline Sync Architecture
+19.1 Local Storage Layer
+-- Updated SQLite schema
+pending_captures (
+id, image_uri, ocr_data, status, created_at, retry_count,
+session_id,            -- FK to local cached sessions
+capture_mode,          -- 'visitor'|'exhibitor'|'quick_capture'
+lead_qualifier,        -- 'hot'|'warm'|'cold'|null
+lead_note,             -- text
+encounter_type,        -- text
+follow_up_date         -- ISO date
+)
+cached_contacts  (id, org_id, data_json, synced_at)
+cached_sessions  (
+id, org_id, name, mode, status,
+local_scan_count, server_scan_count, synced_at
+)
+sync_queue       (id, operation, payload, status, created_at, last_attempt)
+19.2 Sync State Machine
+State
+Trigger
+Action
+OFFLINE
+Network connectivity lost
+All writes go to local SQLite queue with session_id and mode context
+CONNECTING
+Network restored
+Background sync service activates; session counters begin reconciliation
+SYNCING
+Sync service running
+Process queue in FIFO order; upload images; submit OCR; sync session counters
+CONFLICT
+Server returns 409 on contact
+Server-wins resolution; local version archived
+COMPLETE
+Queue empty
+Sync timestamp updated; relationship history checks run for offline captures; UI refresh triggered
+ERROR
+Repeated sync failure
+Item moved to dead-letter queue; user notified
+19.3 Session Counter Reconciliation
+Local scan_count is incremented immediately on every offline capture.
+On sync, the session-counter-sync queue job reconciles local count against server count.
+Conflict policy: server count + number of offline captures not yet synced = reconciled total.
+Duplicate submission prevention: each capture carries a client_idempotency_key (UUID generated at capture time); server rejects duplicate submissions with 200 (already processed).
+20. Analytics Requirements
+Metric Category
+Specific Metrics
+Update Frequency
+OCR Quality
+Scan volume, mean confidence, failure rate, retry rate
+Real-time (15-min rollup)
+Event Session Activity
+Sessions created per day/week; scans per session; session duration; active vs closed
+Daily aggregation
+Lead Funnel (Exhibitor)
+HOT/WARM/COLD/Unqualified counts per session; qualification rate trend; top sessions by Hot count
+Real-time (per scan)
+Encounter Type Distribution
+Quick Capture breakdown by type; top encounter types; trend over 90 days
+Daily aggregation
+Relationship History
+Match rate (% of scans that match existing contact); user decision breakdown; cross-colleague match rate
+Daily aggregation
+Mode Adoption
+% of scans per mode; mode usage trend; users active per mode
+Daily aggregation
+Contact Growth
+New contacts/day, contacts/user, top capturers
+Daily aggregation
+User Engagement
+DAU, MAU, session duration, feature usage
+Daily aggregation
+Duplicate Trends
+New duplicates detected, merge rate, auto-merge rate
+Daily aggregation
+Storage Utilization
+Total bytes, per-org bytes, per-session bytes, image count, growth rate
+Hourly aggregation
+Offline Usage
+Queue depth, sync lag time, offline capture rate
+Real-time
+Export Activity
+Per-session exports, records exported, qualifier filter used, export size
+Per-event
+Error Rates
+API error rate, OCR errors, upload failures
+Real-time
+21. Deployment Architecture
+Component
+Service
+Environment Strategy
+Backend API (NestJS)
+Docker container on Fly.io / Railway / AWS ECS
+dev / staging / production isolation
+PostgreSQL
+Supabase Managed PostgreSQL
+Separate Supabase projects per environment
+Object Storage
+Supabase Storage
+Separate buckets per environment
+Authentication
+Supabase Auth
+Separate Supabase projects per environment
+Job Queue / Cache
+Upstash Redis (serverless)
+Separate instances per environment
+Admin Dashboard
+Vercel / Cloudflare Pages
+Preview deployments per PR; production on main
+Mobile APK
+Internal MDM (Intune/Workspace ONE)
+Staged rollout: 10% → 50% → 100% over 7 days
+Monitoring
+Sentry + Datadog
+Shared across envs with environment tags
+21.1 CI/CD Pipeline
+Developer pushes to feature branch on GitHub.
+GitHub Actions triggers: lint, unit tests, integration tests (Docker Compose with test Postgres).
+Test coverage check: fails if below 80%.
+Security scan: npm audit (CRITICAL severity = build failure); Semgrep SAST.
+PR review + merge to main triggers staging deployment.
+Staging E2E tests (Detox for mobile; Playwright for admin dashboard).
+Manual approval gate for production promotion.
+Blue/green deployment to production; health check validation.
+Automated rollback if health checks fail within 5 minutes.
+v3.0 feature flags: context selection home screen toggleable per org via settings JSONB on organizations table — allows phased rollout per tenant.
+22. Monitoring & Logging
+22.1 Observability Stack
+Concern
+Tool
+Key Signals
+Application Error Tracking
+Sentry
+Error rate, unhandled exceptions, release regression detection
+APM / Distributed Tracing
+Datadog APM
+Request latency, service dependency map, trace sampling
+Infrastructure Monitoring
+Datadog Infrastructure
+CPU, memory, disk, network for all container hosts
+Database Monitoring
+Supabase Dashboard + pg_stat_*
+Query performance, slow query log, connection pool utilization
+Queue Monitoring
+BullMQ Dashboard (Bull Board)
+Queue depth, job throughput, failure rate, dead-letter queue
+Mobile Error Tracking
+Sentry React Native
+Crash rate, ANR rate, JS errors, OCR failure stack traces
+Uptime Monitoring
+BetterUptime / Datadog Synthetics
+Endpoint availability, SSL expiry, API response time
+Log Aggregation
+Datadog Logs / Logtail
+Structured JSON logs, correlation ID tracing, log-to-trace linking
+22.2 Alerting Thresholds
+Alert
+Threshold
+Severity
+Response
+API Error Rate
+> 1% of requests in 5 min window
+CRITICAL
+Page on-call engineer
+API p95 Latency
+> 1 second sustained 5 min
+HIGH
+Alert engineering channel
+OCR Failure Rate
+> 10% of jobs in 1 hour
+HIGH
+Alert engineering channel
+Queue Depth (OCR)
+> 500 pending jobs
+MEDIUM
+Alert engineering channel
+Session Scan Counter Drift
+Local count differs from server by >10 after sync
+MEDIUM
+Alert engineering; investigate sync job
+Relationship Match False Positive Rate
+> 15% of 'add encounter' decisions subsequently undone
+MEDIUM
+Alert product team; review match threshold
+Lead Qualifier Adoption (Exhibitor)
+< 50% of Exhibitor scans have qualifier in active session
+LOW
+Alert org manager; suggest in-app reminder
+Storage Quota (Org)
+> 90% of org quota
+MEDIUM
+Email organization admin
+DB Connection Pool
+> 80% utilization
+HIGH
+Alert engineering channel
+Failed Login Attempts
+> 20 per IP per 5 min
+HIGH
+Security alert + auto-block
+23. Risks & Mitigations
+Risk
+Prob.
+Impact
+Mitigation
+OCR accuracy below 92% target on poor-quality cards
+Medium
+High
+Pre-capture quality gate; manual correction workflow; confidence thresholds; reprocessing support
+Mode selection adds friction — users skip context
+Medium
+Medium
+'Skip / Quick Scan' fallback always available; onboarding tutorial highlights value; active session remembers last mode
+Exhibitor qualifier step slows down scan-to-save in busy booth
+Medium
+High
+Auto-advance after 3 seconds if no note; qualifier-only speed mode; large tap targets optimized for glancing
+Relationship history match creates confusion
+Low
+Low
+History card shows session name + date + colleague name; user can dismiss and create new without friction
+Session counter drift between offline captures and server
+Medium
+Low
+Idempotency keys prevent duplicates; reconciliation job runs on every sync; discrepancy alert if drift > 10
+Exhibitor lead data (Hot/Warm/Cold) export risk
+Low
+High
+Export requires Manager role; every export is audit-logged with filter criteria and record count; signed URLs expire in 1 hour
+Supabase service degradation/outage
+Low
+High
+RTO < 4 hours; Supabase SLA 99.95%; read replica for critical queries; offline-first mobile design
+Duplicate detection false positives causing merges
+Medium
+Medium
+Auto-merge requires admin approval; merge history preserved; reversible merge workflow
+Storage cost overrun at scale
+Medium
+Medium
+Image compression (60%+ size reduction); org-level storage quotas; usage alerts; tiered retention
+JWT token compromise
+Low
+Critical
+RS256 asymmetric signing; short access token TTL (1hr); refresh token rotation; jti blocklist
+MDM distribution failure for APK
+Low
+Medium
+OTA update mechanism; sideload backup procedure; versioned APK archive; staged rollout
+Data breach / unauthorized access
+Low
+Critical
+RLS enforcement; AES-256 encryption; signed URL expiry; comprehensive audit logging
+Mobile offline queue data loss
+Low
+Medium
+SQLite persistence survives app restart; duplicate submission detection; idempotency keys
+24. Scalability Considerations
+24.1 Database Scalability Path
+Horizontal read scaling: Supabase read replicas for analytics queries and admin dashboard.
+Connection pooling: PgBouncer (transaction mode) to support high concurrent API request counts without exhausting PostgreSQL connection limits.
+Partitioning strategy at 100M+ contacts: partition contacts table by organization_id hash or range on created_at.
+Contact Encounters at Scale: The contact_encounters table grows faster than contacts (multiple encounters per contact). At 10M contacts with average 2 encounters each: 20M rows. Partitioning by created_at year recommended at 50M+ rows.
+JSONB field promotion: frequently queried JSONB paths promoted to generated columns with indexes.
+24.2 Application Scalability
+Stateless NestJS API instances: horizontally scalable behind a load balancer; no in-process session state.
+Redis-backed rate limiting and session invalidation ensures consistency across all API instances.
+BullMQ workers scaled independently from API tier based on queue depth metrics.
+Session Scan Counter Hot Path: Exhibitor booths can generate 1+ scan/second across team members. scan_count increments are buffered in Redis and flushed to PostgreSQL in batches every 5 seconds to avoid high-frequency row-level lock contention.
+Relationship Matching Performance: fuzzy string matching scoped to organization_id; trgm index on contacts.search_vector pre-built. At 10M contacts per tenant, query is bounded by org scope.
+24.3 Storage Scalability
+Supabase Storage (S3-compatible) scales to unlimited object count; storage costs are tiered.
+CDN-backed delivery ensures image retrieval latency is independent of origin storage load.
+Aggressive compression policy targets < 150KB per original image after JPEG quality 85 compression.
+Event Sessions at Scale: At 1M+ sessions per large enterprise tenant, session queries are protected by composite index. Sessions older than 2 years are candidates for archival.
+At 10M contacts with one image each: estimated 1.5TB storage; $30–45/month at S3 rates with compression.
+25. Future Enhancements
+Enhancement
+Phase
+Business Value
+CRM Push per Session (Salesforce, HubSpot, Pipedrive)
+Phase 2
+Export HOT leads from Exhibitor session directly to CRM with one tap; replaces CSV workflow
+SSO / SAML 2.0 / OIDC
+Phase 2
+Enterprise identity provider integration; mandatory for large accounts
+iOS Application
+Phase 2
+Expands addressable user base to Apple device users; all three modes supported
+Networking Event Mode (4th mode)
+Phase 2
+Dedicated mode for cocktail receptions, investor dinners, alumni events
+Event QR Code Join
+Phase 2
+Org event organizer generates QR code; attendees scan to join session — no manual session search
+Multi-Language OCR
+Phase 2
+Support for CJK, Arabic, Devanagari script — critical for APAC and MENA markets
+Webhook Outbound Events
+Phase 2
+Contact created/updated/deleted webhooks for external integrations
+Bulk Import (CSV)
+Phase 2
+Import legacy contact lists with deduplication against existing records
+LinkedIn Profile Enrichment
+Phase 2
+Augment OCR-captured data with LinkedIn profile data
+AI Lead Scoring
+Phase 3
+LLM-based scoring of Exhibitor leads using job title, company size, and notes — augments Hot/Warm/Cold with AI confidence
+Follow-up Email Automation
+Phase 3
+Automated follow-up email sequence triggered by lead qualifier tier and follow-up date
+NFC Business Card Support
+Phase 3
+Capture contacts from digital NFC cards (iOS/Android tap-to-share); all three modes compatible
+Relationship Graph View
+Phase 3
+Visual network graph of org relationships: who has met whom, how many times, in what contexts
+Contact Enrichment API
+Phase 3
+Third-party enrichment (Clearbit/Apollo) for contact data augmentation
+Analytics Data Warehouse
+Phase 3
+BigQuery/ClickHouse integration for complex multi-event ROI analytics
+White-Label Mobile SDK
+Phase 4
+Enterprise clients embed CardVault capture in their own apps
+SOC 2 Type II Certification
+Phase 4
+Formal compliance certification for enterprise procurement requirements
+Public API for Third-Party Integrations
+Phase 4
+Open API platform for ecosystem development
+Multi-Region Deployment
+Phase 4
+Sub-100ms p95 API latency globally; data residency compliance
+26. MVP Scope
+The v3.0 MVP scope is the union of all v1.0 MVP features plus the v2.0 context-aware capture additions. All Phase 2+ features are explicitly excluded from the initial release.
+26.1 In-Scope for MVP
+Android APK via internal MDM distribution with context selection home screen.
+Email/password authentication with JWT session management.
+Business card capture with Google ML Kit OCR; field extraction, confidence scoring, manual correction.
+Visitor mode: session create, session browse/join, template selection, scan-under-session, session view screen.
+Exhibitor mode: booth session create, team member assignment, high-volume scan flow, Lead Qualifier (Hot/Warm/Cold), 160-char note, speed mode (auto-advance after 3s).
+Quick Capture mode: encounter type selection (7 types), scan, 200-char note, follow-up date with local notification.
+Database migration: event_sessions, session_members, contact_encounters tables; contacts table ALTER (additive, backward-compatible).
+Relationship History: cross-event match surfacing with three-option decision card (Add Encounter / Create New / View Existing).
+Contact CRUD with organization-wide visibility; encounter history timeline on contact detail screen.
+Duplicate detection at ingestion (email + phone exact match + name fuzzy match).
+Business card image upload, storage (session-aware paths), thumbnail generation, and signed URL retrieval.
+Offline capture queue with background sync for all three modes; session counter reconciliation.
+Three-tier RBAC: employee, manager, super_admin.
+Multi-tenant PostgreSQL with RLS enforcement on all tables including event_sessions.
+Full-text contact search with GIN index; filterable by mode, session, qualifier, encounter type.
+CSV export for managers; per-session CSV export by qualifier tier.
+Admin dashboard: org management, user management, OCR monitoring, audit log browser, Event Sessions panel, Lead Funnel panel, Encounter Type analytics panel.
+Structured logging, Sentry error tracking, basic Datadog monitoring.
+Feature flag: context selection home screen toggleable per org for phased rollout.
+26.2 Explicitly Out of Scope for MVP
+iOS application (Phase 2).
+SSO / SAML / OIDC (Phase 2).
+CRM integrations (Phase 2).
+Networking Event mode as a distinct 4th mode (Phase 2 — use Quick Capture with 'Networking' encounter type in MVP).
+Contact enrichment (Phase 2/3).
+AI scoring or automation (Phase 3).
+Analytics data warehouse (Phase 3).
+Multi-language OCR beyond Latin character sets (Phase 2).
+NFC capture (Phase 3).
+Event QR code join (Phase 2).
+Relationship graph view (Phase 3).
+27. Enterprise Expansion Roadmap
+Phase
+Timeline
+Key Deliverables
+Exit Criteria
+v1.0 (Complete)
+Months 1–4
+Android APK; OCR pipeline; multi-tenant PostgreSQL; 3-tier RBAC; offline sync; admin dashboard; audit logs
+Internal pilot complete; OCR accuracy >= 90%; 0 critical security findings
+v3.0 MVP (Current)
+Months 5–8
+Context-aware capture (Visitor/Exhibitor/Quick Capture); event sessions; lead qualifier; encounter tagging; relationship history; per-session export; updated admin dashboard
+50+ active users across 3 modes; Lead Qualifier used in >= 75% of Exhibitor scans; per-session export validated by 2 sales directors
+Phase 2 (v3.5)
+Months 9–14
+iOS app; SSO/SAML; Salesforce/HubSpot lead push per session; Networking Event mode; multi-language OCR; event QR code join; webhook events; bulk CSV import
+100+ active users; Salesforce integration live; SSO approved by enterprise IT; iOS MAU >30% of mobile users
+Phase 3 (v4.0)
+Months 15–22
+AI lead scoring; follow-up automation; relationship graph; contact enrichment API; analytics data warehouse; NFC capture
+200+ active users; AI scoring adopted by >= 60% of Exhibitor sessions; relationship graph used by >= 40% of managers monthly
+Phase 4 (v4.5)
+Months 23–30
+SOC 2 Type II; white-label mobile SDK; enterprise marketplace listing; public API; multi-region deployment; advanced analytics
+SOC 2 audit passed; first white-label enterprise MSA signed; sub-100ms p95 API globally; 500+ active users
+— END OF DOCUMENT —
+CardVault PRD v3.0  |  Context-Aware Capture Edition  |  Classification: CONFIDENTIAL  |  May 2026

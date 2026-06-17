@@ -1,0 +1,2018 @@
+CardVault
+v3.0 — Context-Aware Capture Edition
+UI/UX Design Specification
+Enterprise Product Design Documentation
+Document Type
+Version
+Date
+Status
+UI/UX Design Specification
+v3.0.0
+2025
+Production Ready
+Platforms: React Native Android  ·  React + TypeScript Dashboard  ·  Enterprise SaaS
+1. Design Philosophy
+Defines the foundational beliefs that govern every design decision in CardVault — from a single button tap to an enterprise analytics dashboard.
+1.1 Brand Personality
+Dimension
+Expression
+Anti-Pattern
+Intelligence
+AI-surfaced insights, contextual suggestions, smart defaults
+Showing raw data dumps or forcing manual configuration
+Reliability
+Predictable interactions, clear system states, honest feedback
+Spinner loops without progress, silent failures
+Speed
+Sub-100ms interactions, skeleton-first loading, instant captures
+Heavy page transitions, blocking modals
+Security
+Role-based UI masking, audit trails visible, token indicators
+Security warnings buried in settings
+Efficiency
+Keyboard shortcuts, bulk operations, progressive disclosure
+Wizard flows for simple tasks, verbose confirmations
+Premium
+Tight typographic rhythm, purposeful whitespace, subtle depth
+Gradient heavy hero banners, drop shadow overload
+1.2 Product Emotion Strategy
+Users should feel three distinct emotions across CardVault's three use contexts:
+Context
+Target Emotion
+Design Response
+Mobile Capture (Event Floor)
+Focused + Confident
+High contrast, large touch targets, minimal cognitive load, one action per screen
+Admin Dashboard
+Empowered + In-Control
+Dense but structured data, progressive disclosure, bulk operations always visible
+Relationship Review
+Trust + Curiosity
+Warm surfaces, conversational copy, smooth reveal animations for match results
+1.3 UX Principles
+Speed as a First-Class Principle
+Every interaction budget is measured. Target thresholds:
+Interaction
+Target
+Degraded
+Failed
+OCR capture to confirmation
+< 1.8s
+< 3s
+> 3s → manual fallback
+Dashboard page navigation
+< 200ms
+< 500ms
+> 500ms → skeleton
+Table filter apply
+< 80ms
+< 200ms
+> 200ms → debounce + spinner
+Session switch
+< 300ms
+< 600ms
+> 600ms → loading indicator
+Sync queue flush
+Background
+< 5s notice
+> 30s → user alert
+Progressive Disclosure
+Show exactly what the user needs for their current task — not everything CardVault can do.
+Advanced settings, bulk operations, and export functions live in context menus or overflow panels.
+Qualification tags (HOT/WARM/COLD) must be one-tap accessible on the exhibitor capture screen — zero sub-menus.
+Offline-First Trust
+The UI must never appear "broken" when offline. Show explicit offline states, queued counts, and expected sync times.
+Offline badges use amber (#F59E0B) — not red, which implies error. Offline is a valid operating state.
+All captures completed offline display a subtle sync-pending indicator that disappears post-sync without disrupting workflow.
+Data-Density Strategy
+CardVault handles high-density enterprise data. The strategy is layered density:
+Layer
+Density Level
+Components
+Dashboard overview
+Low-medium
+KPI cards, sparklines, summary tables
+Analytics & Reports
+High
+Full data tables, multi-axis charts, export controls
+Mobile Capture
+Minimal
+Single-focus screens, one primary action, collapsed metadata
+Session Management
+Medium
+Session cards with key stats, expandable detail rows
+Audit Logs
+Very High
+Dense tables, timestamp precision, actor identification
+1.4 Enterprise Usability Philosophy
+Every user role has a tailored experience — Super Admin, Org Admin, Event Manager, Sales Rep, Exhibitor.
+UI surfaces only the controls relevant to the authenticated role. Role-irrelevant actions are hidden, not disabled.
+Bulk operations are always visible when a table is present. Admins expect to act on multiple records simultaneously.
+Confirmation dialogs are reserved for destructive or irreversible operations only. Non-destructive actions confirm via toast.
+Loading states are always informative: skeleton loaders mirror the actual content layout.
+1.5 Mobile-First Interaction Principles
+Principle
+Implementation
+One-handed operation
+All primary capture actions reachable by right thumb. FAB at bottom-right. Bottom sheet for secondary actions.
+Thumb Zone Design
+Critical actions within 75mm of bottom edge. Top navigation is navigational only, never primary action.
+Minimum touch targets
+48×48dp minimum for all interactive elements. 56×56dp for primary capture/action buttons.
+Gesture first
+Swipe-right to mark HOT, swipe-left to mark COLD on qualifier cards. Long-press for secondary options.
+Auto-advance
+Exhibitor high-speed mode auto-advances to next capture after qualifier selection — no button tap required.
+Context persistence
+Returning from background always shows last capture state, never resets to home screen.
+1.6 Accessibility Philosophy
+WCAG 2.1 AA compliance is baseline. WCAG 2.1 AAA for critical flows (OCR review, session management, admin controls).
+Color is never the sole differentiator — always paired with shape, icon, or label.
+All interactive components support keyboard navigation with visible focus rings (2px offset, brand blue color).
+Screen reader support via semantic HTML (web) and accessibilityLabel + accessibilityRole (React Native).
+Minimum 4.5:1 contrast ratio for body text; 3:1 for large text and UI components.
+1.7 How Speed and Confidence Shape UI
+CardVault's primary value moment is the 10–15 second window on an event floor when a rep scans a business card. Every design decision for mobile capture must optimize for this window.
+Confidence = Predictability. Buttons don't move between states. Primary actions are always at the bottom. OCR results appear in a consistent card layout every time.
+Speed = Zero Friction. No login prompts mid-event (persistent auth). No multi-step forms for capture. OCR pre-fills everything — user only corrects.
+Enterprise Trust = Visual Calm. No anxiety-inducing reds unless something actually failed. Muted palette with purposeful accent use. Dense but breathable layouts.
+2. Visual Design System — Color
+A premium enterprise color system inspired by Linear, Stripe, and Ramp. Restrained by default, intentional in accent use, and fully accessible.
+2.1 Primary Palette
+Token Name
+HEX
+RGB
+Usage
+brand-600
+#1A56DB
+26, 86, 219
+Primary buttons, active nav states, key links
+brand-700
+#1E40AF
+30, 64, 175
+Button hover states, pressed states
+brand-800
+#1E3A5F
+30, 58, 95
+Dark sidebar, header backgrounds
+brand-500
+#3B82F6
+59, 130, 246
+Secondary interactive elements, icon fills
+brand-400
+#60A5FA
+96, 165, 250
+Hover highlights on dark surfaces
+brand-100
+#DBEAFE
+219, 234, 254
+Selected row backgrounds, chip fills
+brand-50
+#EFF6FF
+239, 246, 255
+Section backgrounds, subtle dividers
+2.2 Neutral / Grayscale Palette
+Token
+HEX
+Usage
+neutral-950
+#0F172A
+Page headings, primary text on light
+neutral-900
+#1E293B
+Body text, sidebar items active
+neutral-700
+#334155
+Secondary text, labels
+neutral-500
+#64748B
+Placeholder text, captions, meta info
+neutral-400
+#94A3B8
+Disabled text, timestamp labels
+neutral-200
+#E2E8F0
+Borders, dividers, table separators
+neutral-100
+#F1F5F9
+Background alternates, hover states
+neutral-50
+#F8FAFC
+Page background, card surfaces
+white
+#FFFFFF
+Card backgrounds, modal surfaces
+2.3 Semantic Colors
+State
+Token
+HEX
+Background Tint
+Usage
+Success
+success-600
+#16A34A
+#F0FDF4
+Synced, captured, confirmed actions
+Warning
+warning-500
+#F59E0B
+#FFFBEB
+Offline state, low confidence OCR
+Error
+error-600
+#DC2626
+#FEF2F2
+Validation failures, sync errors
+Info
+info-500
+#0EA5E9
+#F0F9FF
+Status updates, informational toasts
+Neutral
+neutral-500
+#64748B
+#F8FAFC
+General status, timestamps
+2.4 Lead Qualifier Colors
+These colors appear prominently in exhibitor workflows and must be immediately distinguishable:
+Qualifier
+Token
+Background
+Text
+Border
+Contrast Ratio
+HOT
+qualifier-hot
+#FEF2F2
+#DC2626
+#FECACA
+4.9:1 ✓
+WARM
+qualifier-warm
+#FFFBEB
+#D97706
+#FDE68A
+4.7:1 ✓
+COLD
+qualifier-cold
+#EFF6FF
+#1A56DB
+#BFDBFE
+5.1:1 ✓
+2.5 Surface Hierarchy (Light Mode)
+Level
+Token
+HEX
+Usage
+Base
+surface-base
+#F8FAFC
+App background, page canvas
+Surface 1
+surface-1
+#FFFFFF
+Cards, panels, modals
+Surface 2
+surface-2
+#F1F5F9
+Secondary panels, table alternates
+Surface 3
+surface-3
+#E2E8F0
+Active states, selected rows, chip fills
+Overlay
+surface-overlay
+rgba(15,23,42,0.5)
+Modal backdrops, sheet backdrops
+2.6 Accessibility & Contrast Notes
+All color combinations in this palette meet WCAG 2.1 AA. Critical flow components (OCR review, session join, qualifier selection) target AAA.
+brand-600 (#1A56DB) on white background: 5.74:1 — passes AA for body text ✓
+neutral-950 (#0F172A) on white: 19.1:1 — passes AAA ✓
+neutral-500 (#64748B) on white: 4.6:1 — passes AA for body text ✓
+warning-500 on white: 3.2:1 — use only for large text or icons (not body copy)
+Never use warning/error colors as background for text smaller than 18px bold / 24px regular.
+2.7 Mobile Visibility Considerations
+On OLED screens, brand-800 (#1E3A5F) renders with exceptional depth — use as sidebar background on mobile dark mode.
+Avoid pure black (#000000) for text — neutral-950 (#0F172A) provides OLED-safe softness.
+Qualifier chip colors (HOT/WARM/COLD) use 2px colored left border in addition to background for color-blind accessibility.
+Outdoor event use: All primary capture UI elements maintain minimum 7:1 contrast for bright sunlight legibility.
+3. Typography System
+Inter as primary with JetBrains Mono for code/data. Tight, readable, enterprise-grade at all screen densities.
+3.1 Font Selection Rationale
+Font
+Role
+Rationale
+Inter (Variable)
+Primary UI font
+Exceptional legibility at small sizes; neutral enterprise personality; variable font reduces bundle size; used by Linear, Vercel, Notion
+JetBrains Mono
+Data / Code / IDs
+Optimal for long IDs, token strings, phone numbers, formatted data in tables; clear digit disambiguation (0 vs O)
+System fallback
+Loading state
+-apple-system, BlinkMacSystemFont, Segoe UI — prevents font flash on initial load
+3.2 Type Scale — Dashboard (Web)
+Token
+Size
+Line Height
+Weight
+Usage
+display-2xl
+72px / 4.5rem
+90px
+700
+Marketing headlines (not in app)
+display-xl
+48px / 3rem
+60px
+700
+Page hero numbers, empty state titles
+display-lg
+36px / 2.25rem
+44px
+700
+Section page titles
+heading-xl
+30px / 1.875rem
+38px
+600
+Modal titles, panel headings
+heading-lg
+24px / 1.5rem
+32px
+600
+Card headers, sidebar section labels
+heading-md
+20px / 1.25rem
+28px
+600
+Table column section headers
+heading-sm
+18px / 1.125rem
+26px
+600
+Sub-section headings
+body-xl
+18px / 1.125rem
+28px
+400
+Lead copy, important descriptions
+body-lg
+16px / 1rem
+24px
+400
+Primary body copy, form labels
+body-md
+14px / 0.875rem
+20px
+400
+Secondary body, table content
+body-sm
+13px / 0.8125rem
+18px
+400
+Captions, helper text, tooltips
+body-xs
+12px / 0.75rem
+16px
+400
+Badges, micro-labels, timestamps
+mono-md
+14px / 0.875rem
+20px
+400 (JetBrains)
+IDs, tokens, data values
+mono-sm
+12px / 0.75rem
+16px
+400 (JetBrains)
+Table data, compact IDs
+3.3 Type Scale — Mobile (React Native)
+Token
+Size (sp)
+Line Height
+Weight
+Usage
+mobile-title-xl
+28sp
+36sp
+700
+Screen titles, large action prompts
+mobile-title-lg
+22sp
+30sp
+600
+Card headers, section titles
+mobile-title-md
+18sp
+26sp
+600
+Sub-section, modal headings
+mobile-body-lg
+16sp
+24sp
+400
+Primary content, form field text
+mobile-body-md
+14sp
+22sp
+400
+Secondary labels, descriptions
+mobile-caption
+12sp
+18sp
+400
+Timestamps, meta, badges
+mobile-ocr-field
+15sp
+22sp
+500
+OCR review fields — slightly bolder for correction clarity
+mobile-qualifier
+13sp
+18sp
+700
+HOT / WARM / COLD labels — always uppercase bold
+3.4 Typography Rules
+Line length: 65–80 characters max for body copy. Use max-width constraints on content columns.
+Never set body text below 13px on web, 12sp on mobile.
+Table cells: body-md (14px) with 1.4 line height. Dense but never cramped.
+Form labels: body-sm (13px), weight 500 (medium), neutral-700. Always above the field, never inside as placeholder-only.
+Numeric data in tables always uses JetBrains Mono for alignment and digit clarity.
+Headings use Inter with optical size adjustments — do not fake weight with letter-spacing.
+Letter-spacing: body copy 0. Headings at display sizes: -0.02em tracking for tighter premium feel.
+Uppercase text: Use sparingly — qualifier labels, table column headers, badge labels only. Never for body copy.
+4. Spacing & Layout System
+4pt base unit grid with 8pt increments for structural spacing. Consistent, predictable, and Tailwind-compatible.
+4.1 Spacing Scale
+Token
+Value
+Tailwind
+Usage
+space-0
+0px
+p-0
+Reset / collapse
+space-1
+4px
+p-1
+Icon inner padding, tight gaps
+space-2
+8px
+p-2
+Badge padding, chip inner spacing
+space-3
+12px
+p-3
+Table cell padding, form helper gap
+space-4
+16px
+p-4
+Card padding (compact), form field height
+space-5
+20px
+p-5
+Standard input height spacer
+space-6
+24px
+p-6
+Card padding (standard), modal padding
+space-8
+32px
+p-8
+Section padding, large card padding
+space-10
+40px
+p-10
+Page section gap
+space-12
+48px
+p-12
+Major section spacing, page top padding
+space-16
+64px
+p-16
+Hero / empty state vertical spacing
+space-20
+80px
+p-20
+Page-level section breaks
+space-24
+96px
+p-24
+Ultra-wide layout gutters
+4.2 Grid System — Dashboard
+Breakpoint
+Columns
+Gutter
+Margin
+Max Content Width
+Mobile (< 768px)
+4
+16px
+16px
+Fluid
+Tablet (768–1023px)
+8
+24px
+24px
+Fluid
+Desktop (1024–1279px)
+12
+24px
+32px
+1200px
+Wide (1280–1535px)
+12
+32px
+48px
+1440px
+Ultra-wide (≥ 1536px)
+12
+40px
+80px
+1600px (centered)
+4.3 Dashboard Layout Dimensions
+Component
+Value
+Notes
+Sidebar width (expanded)
+256px
+Fixed on desktop, overlay on tablet
+Sidebar width (collapsed)
+64px
+Icon-only mode on desktop
+Sidebar transition
+200ms ease-out
+Smooth collapse/expand
+Top navigation height
+60px
+Fixed, z-index: 100
+Content area padding
+32px (desktop)
+24px tablet, 16px mobile
+Card border radius
+8px
+Consistent across all card types
+Page title row height
+72px
+Includes breadcrumb + actions bar
+Table row height
+48px (default)
+40px compact, 56px relaxed
+Table header height
+44px
+Sticky on scroll
+Filter bar height
+56px
+Between title and table
+Modal max width
+560px (sm) / 720px (md) / 960px (lg)
+Never full-bleed except mobile
+Bottom sheet mobile
+Max 80vh, min 200px
+Drag handle always present
+4.4 Mobile Layout Rules
+Component
+Value
+Notes
+Bottom navigation height
+64px + safe area
+Tab bar: 5 items max
+Top app bar height
+56dp
+Standard Material-aligned
+FAB size
+56dp diameter
+Primary capture action
+FAB position
+16dp from right, 80dp from bottom
+Above bottom nav
+Card padding
+16dp horizontal, 12dp vertical
+Compact for list views
+Modal / Sheet border radius
+16dp top corners
+Bottom sheet handle: 4px × 32px
+List item min height
+64dp (standard), 56dp (compact)
+Per Material guidelines
+Safe area bottom
+env(safe-area-inset-bottom)
+Always applied to bottom nav
+OCR overlay viewport
+100vh no-scroll
+Camera view is full-bleed
+Capture action zone
+Bottom 35% of screen height
+Primary action area, thumb-optimized
+4.5 Touch Target Guidelines
+WCAG 2.5.5 Success Criterion: All interactive elements must have a minimum touch target of 44×44 CSS pixels. CardVault enforces 48×48dp minimum for all targets.
+Element
+Minimum Size
+Recommended
+Icon buttons
+44×44dp
+48×48dp
+Primary action buttons
+44dp height
+56dp (full-width on mobile)
+Qualifier chips (HOT/WARM/COLD)
+48×36dp
+56×44dp in exhibitor mode
+Table row actions
+32×32dp
+40×40dp with padding
+Bottom navigation tabs
+64dp height
+Equal width, full height tappable
+Checkbox / radio
+44×44dp hit area
+20×20 visual, padded to 44×44
+Floating action button
+56×56dp
+64×64dp for primary capture
+5. Component Design System
+Detailed visual specifications and interaction behaviors for all UI components. Engineering-ready.
+5.1 Input Components
+Text Field
+State
+Border
+Background
+Label Color
+Notes
+Default
+1px neutral-200
+white
+neutral-700
+Label floats above field
+Focused
+2px brand-600
+white
+brand-600
+Blue label and ring, box-shadow: 0 0 0 3px brand-100
+Filled
+1px neutral-200
+white
+neutral-500
+Value in body-md neutral-900
+Error
+2px error-600
+#FEF2F2
+error-600
+Error message below field in error-600 body-xs
+Disabled
+1px neutral-100
+neutral-50
+neutral-400
+Cursor: not-allowed, value in neutral-400
+Read-only
+1px neutral-200
+neutral-50
+neutral-500
+No focus ring, informational only
+Height: 40px (standard), 36px (compact), 48px (large). Border radius: 6px. Padding: 12px horizontal, 10px vertical.
+OCR Review Fields
+Special variant for post-OCR capture review:
+Confidence Level
+Border
+Badge
+Behavior
+High (>90%)
+1px neutral-200
+None
+Field pre-filled, editable, no special state
+Medium (70–90%)
+2px warning-400
+Amber dot + "Review" label
+Field highlighted, cursor auto-focuses
+Low (<70%)
+2px error-400
+Red dot + "Verify" label
+Field value shown in warning color, mandatory review before save
+Empty / Undetected
+2px neutral-300 dashed
+Gray "Not Detected" badge
+Placeholder shown, optional for non-required fields
+Qualifier Selector (Exhibitor Mode)
+Full-width segmented control, 56dp height on mobile:
+State
+HOT
+WARM
+COLD
+Unselected
+White bg, red border
+White bg, amber border
+White bg, blue border
+Selected
+Red bg (#FEF2F2), red text bold
+Amber bg (#FFFBEB), amber text bold
+Blue bg (#EFF6FF), blue text bold
+Active press
+Red-100 bg
+Amber-100 bg
+Blue-100 bg
+5.2 Button System
+Variant
+Background
+Text
+Border
+Hover
+Active
+Size Options
+Primary
+brand-600
+White
+None
+brand-700
+brand-800 + scale 0.98
+sm(32) / md(40) / lg(48)
+Secondary
+White
+brand-600
+1px brand-200
+brand-50 bg
+brand-100 bg
+sm/md/lg
+Tertiary
+Transparent
+brand-600
+None
+brand-50 bg
+brand-100 bg
+sm/md/lg
+Danger
+error-600
+White
+None
+error-700
+error-800
+sm/md/lg
+Ghost
+Transparent
+neutral-700
+None
+neutral-100 bg
+neutral-200 bg
+sm/md/lg
+Loading
+brand-600 (dim)
+Spinner
+None
+Non-interactive
+Non-interactive
+All sizes
+Border radius: 6px all buttons. Font: body-md (14px) weight 500. Padding: 12px horizontal (sm), 16px (md), 20px (lg). Icon buttons: 36×36 (sm), 40×40 (md), 44×44 (lg). Icon size: 16px (sm), 18px (md), 20px (lg).
+5.3 Card Components
+Contact Card
+Element
+Specification
+Container
+White background, 8px radius, 1px neutral-200 border, 0px 1px 3px rgba shadow
+Header area
+16px padding, flex row: avatar (40px circle) + name/title column + actions (overflow menu)
+Avatar fallback
+Initials on brand-100 background, body-md bold brand-600
+Name
+body-lg (16px) weight 600 neutral-900
+Title / Company
+body-sm (13px) neutral-500
+Tag row
+Horizontal scroll, 8px gap, qualifier chip + session tags
+Footer
+body-xs neutral-400 timestamp + sync status icon
+Hover state
+neutral-50 background, 2px brand-200 border, translate-y(-1px) shadow elevation
+Session Card
+Element
+Specification
+Container
+White, 8px radius, status-colored left border (4px) based on session state
+Session name
+heading-sm (18px) bold neutral-900
+Event name
+body-sm neutral-500 with location pin icon (16px)
+Stats row
+3 stats: Captures / Qualified / Exported in mono-sm with label captions
+Status badge
+ACTIVE (green-600 bg), PAUSED (amber bg), COMPLETED (neutral bg), DRAFT (blue bg)
+Actions
+Primary: Enter/Resume button. Secondary: Settings, Export in overflow menu
+Progress bar
+Thin 4px bar showing capture progress vs. target (if set)
+Analytics Card / KPI Card
+Element
+Specification
+Container
+White, 8px radius, no border (shadow only: 0 1px 3px rgba(0,0,0,0.08))
+Metric value
+display-xl (48px) bold neutral-950 with JetBrains Mono
+Metric label
+body-sm neutral-500 uppercase tracking-wide
+Trend indicator
+Arrow icon + delta % in success-600 (up) or error-600 (down)
+Sparkline
+48px height, brand-600 line, brand-100 fill, no axes
+Footer
+body-xs neutral-400: "vs. last period" comparison text
+Loading state
+Skeleton: 2 stacked gray bars (40px + 24px wide)
+5.4 Navigation Components
+Dashboard Sidebar
+Element
+Specification
+Background
+neutral-950 (#0F172A) — deep dark, professional anchor
+Width
+256px expanded, 64px collapsed, transition 200ms ease-out
+Logo area
+60px height, 24px padding, brand-500 icon + "CardVault" wordmark
+Nav items
+40px height, 12px horizontal padding, body-md 500 weight
+Nav item — default
+Text: neutral-400, Icon: neutral-500
+Nav item — active
+Text: white, Icon: brand-400, Background: rgba(59,130,246,0.12), left border 3px brand-500
+Nav item — hover
+Text: neutral-200, Background: rgba(255,255,255,0.06)
+Section labels
+body-xs uppercase tracking-widest neutral-600, 16px padding-top, 8px padding-bottom
+Bottom area
+User avatar + name + role badge + settings icon, pinned to sidebar bottom
+Workspace switcher
+Dropdown in top of sidebar showing org name + chevron
+Mobile Bottom Navigation
+Tab
+Icon
+Active State
+Home
+home-outline / home-solid
+brand-600 icon + label, brand-50 pill background
+Capture
+camera-outline / camera-solid (FAB style)
+Elevated FAB-like treatment, brand-600
+Sessions
+calendar-outline / calendar-solid
+brand-600 icon + label
+Contacts
+users-outline / users-solid
+brand-600 icon + label
+More
+dots-horizontal
+neutral-500 (opens bottom sheet)
+5.5 Feedback Components
+Toast Notifications
+Type
+Icon
+Colors
+Duration
+Position
+Success
+check-circle
+success-600 bg-tint, success-600 icon
+3s auto-dismiss
+Bottom-center mobile, Top-right web
+Error
+x-circle
+error-600 bg-tint, error-600 icon
+6s + manual dismiss
+Same as above
+Warning
+alert-triangle
+warning-500 bg-tint, warning-500 icon
+5s + manual dismiss
+Same as above
+Info
+info
+info-500 bg-tint, info-500 icon
+4s auto-dismiss
+Same as above
+Sync complete
+cloud-upload
+success-600 tint
+2s auto-dismiss
+Same as above
+Toast specs: 320px min-width, 500px max-width. Border radius 8px. Padding 12px 16px. Stack gap 8px. Entrance: slide-up 200ms. Exit: fade-out 150ms.
+Offline Indicator
+State
+Visual
+Offline
+Amber pill badge top-right: "Offline · 3 queued" with wifi-off icon
+Syncing
+Blue pill badge: "Syncing..." with rotating sync icon
+Sync failed
+Red pill badge: "Sync failed · Retry" with alert icon — tappable
+Online (no queue)
+Hidden — no badge shown when everything is normal
+Skeleton Loaders
+Skeletons always mimic the exact layout of their real content counterparts. Use shimmer animation: background gradient moving left-to-right, 1.5s cycle, ease-in-out.
+Contact card skeleton: avatar circle 40px + two bars (120px, 80px) + tag row (3 rounded pills)
+KPI card skeleton: large bar 80×40px + small bar 120×16px + sparkline rectangle
+Table skeleton: full-width rows, 3 columns, alternating opacity shimmer
+6. Mobile App UX Design
+React Native Android. Optimized for one-handed event-floor use. OCR-first, offline-first, speed-first.
+6.1 App Architecture & Navigation
+Screen Group
+Route
+Access Level
+Auth
+/auth/login, /auth/org-select
+Public
+Home (Visitor)
+/(tabs)/home [visitor]
+Authenticated
+Home (Exhibitor)
+/(tabs)/home [exhibitor]
+Exhibitor role
+Capture Flow
+/capture/scan, /capture/review, /capture/confirm
+Authenticated
+Session
+/sessions/list, /sessions/[id], /sessions/join
+Authenticated
+Contacts
+/contacts/list, /contacts/[id], /contacts/history
+Authenticated
+Quick Capture
+/capture/quick
+Authenticated
+Settings / Sync
+/settings, /settings/sync
+Authenticated
+6.2 Home Screen
+Visitor Mode Home
+Zone
+Content
+UX Notes
+Header
+Greeting + user name + sync status badge
+Sync badge amber if offline, hidden if synced
+Active Session Banner
+Current session name + capture count + "Capture" CTA button
+Full-width card, brand-600 background, prominent
+Quick Actions Row
+3 icon cards: Scan Card, Join Session, View Contacts
+Equal width, 64dp height, tap navigates
+Recent Captures
+Last 5 contacts as horizontal scroll cards
+Empty state if no captures
+Upcoming Sessions
+Next 2 sessions with date/time + join button
+Pulled from calendar integration
+Exhibitor Mode Home
+Zone
+Content
+UX Notes
+Session Header
+Event name + booth # + session name + LIVE badge
+Full-width, brand-800 background, white text
+Queue Counter
+Large number: "47 Captures Today" + HOT/WARM/COLD breakdown
+Prominent stats, center of screen
+Capture FAB
+Large camera button center + label "Scan Card"
+Oversized FAB (72dp), always visible
+Recent Queue
+Last 8 captures in a compact list with qualifier chips
+Tap to edit, swipe to re-qualify
+Sync Status
+Persistent bottom bar showing queue count + last sync time
+Amber if pending, green if synced
+6.3 OCR Capture Flow
+Camera Screen
+Element
+Specification
+Viewfinder
+Full-screen camera preview, 100vh no status bar padding
+Card overlay guide
+Rounded rect (85% screen width × 55% height), animated border pulses brand-600 when card detected
+Blur indicator
+Bottom bar: "Move closer" / "Hold steady" / "Good — tap to capture" with confidence level
+Auto-capture trigger
+When confidence > 90% for 800ms: auto-shutter with haptic feedback + flash overlay
+Manual capture button
+72dp circle, white background, camera icon, bottom center + 32dp from bottom
+Flashlight toggle
+44×44dp icon button, top-right corner
+Close button
+44×44dp X button, top-left corner
+Scan mode selector
+Pill tabs at top: "Business Card" | "Badge" | "QR Code"
+OCR Review Screen
+Appears immediately after capture. Split-screen on larger Android devices:
+Element
+Specification
+Card image
+Top 35% of screen: captured card image, pinch-zoom enabled
+Review form
+Scrollable field list: First Name, Last Name, Email, Phone, Company, Title, Website, LinkedIn
+Field confidence
+Each field has confidence indicator (colored dot) and edit state per OCR confidence spec
+Auto-focus
+First low-confidence field auto-receives focus with keyboard open
+Relationship alert
+If existing contact match detected: amber banner at top "Possible existing contact: [Name] — View" with merge option
+Action bar
+Bottom: "Discard" (ghost button) + "Save Contact" (primary button)
+Qualifier row
+HOT/WARM/COLD segmented control above action bar (exhibitor sessions only)
+Notes field
+Expandable text area: "Add a note..." below the structured fields
+Follow-up toggle
+Date picker row: "Add follow-up" toggle + date chip
+6.4 Exhibitor High-Speed Flow
+This flow is the most performance-critical in CardVault. Design goal: 8 seconds average from physical card pickup to qualified capture completion.
+Step
+Action
+Duration Target
+UX Decision
+1. Trigger
+FAB tap or volume button press
+< 200ms to camera
+Hardware button support for gloved use
+2. Scan
+Card in frame, auto-capture
+< 1.5s
+No manual shutter needed in auto mode
+3. OCR
+Processing overlay
+< 1.5s
+Animated scanning line over card image
+4. Quick Qualify
+HOT/WARM/COLD full-screen choice
+< 1s tap
+Three large buttons, entire screen height each third
+5. Auto-advance
+Returns to camera
+< 300ms
+Haptic confirmation + brief success flash, no modal
+6. Background save
+Contact saves async
+Background
+Queue shown in persistent footer badge
+One-handed operation: All exhibitor mode actions reachable by right thumb. Qualifier buttons stack full width. Camera trigger at natural right-thumb resting position.
+Auto-advance setting: Enabled by default in exhibitor mode, toggleable in session settings. When enabled, qualify screen automatically returns to camera after 1.5s if no second tap.
+6.5 Offline UX
+State
+Visual Treatment
+User Communication
+Just went offline
+Amber toast: "You're offline — captures will save locally"
+Non-blocking, 5s duration
+Offline with queue
+Amber pill in top bar: "Offline · N queued"
+Persistent until sync
+Capture while offline
+Capture completes normally, success state shows "Saved locally"
+No degraded experience
+Reconnected
+Blue toast: "Back online — syncing..." with progress
+Sync progress bar if queue > 5 items
+Sync complete
+Green toast: "N captures synced" — 2s auto-dismiss
+Amber pill disappears
+Sync conflict
+Modal: "This contact was also updated remotely. Which version to keep?"
+Shows side-by-side diff
+Sync failed
+Red pill + retry option in notification area
+Tap to retry, option to export local captures as CSV
+6.6 Relationship History UX
+When OCR detects a possible match to an existing contact, the Relationship History panel activates:
+Element
+Specification
+Trigger
+Amber banner on OCR review: "Similar contact found — [Name], [Company]"
+Match confidence badge
+Percentage pill: green (>85%), amber (70–85%), red (<70%). Shows top 3 fields that matched.
+Timeline view
+Vertical timeline: Date | Event/Session name | Notes snippet. Newest at top.
+Encounter cards
+Each entry shows: qualifier from that event, notes preview, export status
+Merge decision
+Two buttons: "Add as new encounter" (adds to existing contact timeline) | "Create new contact" (separate record)
+Confidence breakdown
+Expandable row showing which fields matched and at what confidence level
+Animation
+Timeline items slide in from bottom staggered 80ms apart on panel open
+7. Admin Dashboard UX
+React + TypeScript. Built for enterprise operations teams, super admins, and event managers. Data-dense, action-oriented.
+7.1 Sidebar Navigation Hierarchy
+Section
+Items
+Role Access
+Overview
+Dashboard
+All authenticated
+Events
+Sessions, Events Calendar, Event Templates
+Event Manager, Admin, Super Admin
+Contacts
+All Contacts, Import/Export, Duplicates
+All authenticated
+Analytics
+Lead Funnel, Encounter Stats, Session Reports, Export Center
+Manager, Admin, Super Admin
+Organization
+Team Members, Roles, Integrations, API Keys
+Admin, Super Admin
+Platform Admin
+Organizations, Global OCR Monitor, Audit Logs, System Health
+Super Admin only
+Settings
+Account, Notifications, Security
+All authenticated
+7.2 Overview Dashboard
+Widget
+Size (grid cols)
+Content
+Update Frequency
+Total Captures (KPI)
+3 cols
+Count + trend vs last period + sparkline
+Real-time
+Active Sessions (KPI)
+3 cols
+Count + session names list
+Real-time
+Sync Status (KPI)
+3 cols
+Pending / synced / failed counts
+Real-time
+Qualified Rate (KPI)
+3 cols
+HOT%/WARM%/COLD% donut breakdown
+Real-time
+Capture Timeline
+8 cols
+Bar chart: captures per hour/day
+Live refresh 60s
+Top Sessions
+4 cols
+Ranked list: session name + capture count + trend
+Live refresh 60s
+Lead Funnel
+6 cols
+Funnel: Captured → Qualified → Exported → CRM Synced
+Refresh 5min
+Recent Activity Feed
+6 cols
+Live feed: capture events, syncs, admin actions
+Real-time WebSocket
+OCR Health
+12 cols
+Success rate, avg confidence, error breakdown
+Refresh 5min
+7.3 Table UX Standards
+Column Headers
+Sticky on scroll (position: sticky, top: 60px to account for topbar)
+Sortable columns show sort icon (up/down/neutral) inline after label
+Column resize handle: 4px width hit area, neutral-300 color on hover
+Checkbox column always first (24px width), fixed left
+Row Behaviors
+Behavior
+Specification
+Hover
+neutral-50 background, row actions reveal on right side
+Selected
+brand-50 background, left border 3px brand-600
+Multi-select
+Check all in header + floating bulk action bar appears at bottom
+Row click
+Opens detail panel (sidebar panel) or navigates to detail page (context-dependent)
+Inline edit
+Double-click cell: text turns into input field, Enter to save, Escape to cancel
+Drag to sort
+Drag handle icon (6 dots) on left of sortable table rows
+Expandable row
+Chevron right → expands to show nested data or notes without leaving page
+Bulk Actions Bar
+Appears as a floating bar above the table when any rows are selected:
+Background: neutral-950, white text, 8px radius, box-shadow elevated
+Left: "N selected" count + deselect all X button
+Right: contextual action buttons (Export, Delete, Assign Session, Change Qualifier, etc.)
+Disappears instantly when selection is cleared
+7.4 Analytics & Data Visualization
+Chart Type
+Library
+Usage
+Style Notes
+Bar chart
+Recharts
+Captures over time, session comparisons
+brand-600 bars, neutral-200 grid, no border
+Line chart
+Recharts
+Trend lines, OCR accuracy over time
+brand-600 line, brand-50 area fill
+Donut chart
+Recharts
+Qualifier breakdown, sync status
+HOT/WARM/COLD colors + neutral for remainder
+Funnel
+Custom SVG
+Lead conversion funnel
+Gradient fill top-to-bottom, % labels in each segment
+Heatmap
+D3 / custom
+Capture activity by hour×day
+brand-50 to brand-700 scale, tooltips on hover
+Sparkline
+Recharts
+KPI card trends
+48px height, no axes, brand-600, area fill brand-50
+Chart Design Rules
+No chart borders — charts are content, not UI elements. They should feel embedded in the page.
+Grid lines: horizontal only, 1px neutral-100, subtle. Vertical grid lines only in time-series bar charts.
+Axis labels: body-xs (12px) neutral-400. Never rotate axis labels — truncate and show tooltip instead.
+Tooltips: white background, 8px radius, 1px neutral-200 border, body-sm text. Always show exact value.
+Empty state for charts: illustration + "No data for this period" in neutral-500.
+Loading state: skeleton shimmer matching chart area dimensions.
+7.5 OCR Monitoring Dashboard
+Panel
+Content
+Success Rate KPI
+Large % value + trend + threshold indicator (green > 95%, amber 85–95%, red < 85%)
+Confidence Distribution
+Histogram: count of captures at each confidence bucket (0–60, 60–70, 70–80, 80–90, 90–100)
+Low-Confidence Queue
+Table of captures with < 70% confidence: card image thumbnail, session, user, date, Re-review CTA
+Error Classification
+Donut: blur errors / lighting / partial card / no card detected / OCR engine failure
+Processing Time
+P50/P95/P99 latency table by session + time period
+Manual Override Rate
+Bar chart: sessions ranked by field edit rate — indicates OCR quality issues
+7.6 Audit Log UX
+Column
+Width
+Content
+Notes
+Timestamp
+160px
+YYYY-MM-DD HH:mm:ss UTC in JetBrains Mono
+Always UTC, hover shows local time
+Actor
+200px
+User avatar + name + role badge
+Links to user profile
+Action
+160px
+Action type chip (colored)
+CREATE/UPDATE/DELETE/EXPORT/LOGIN
+Resource
+200px
+Resource type + ID in monospace
+Links to resource detail
+Organization
+160px
+Org name (Super Admin view)
+Hidden for org-scoped views
+IP Address
+140px
+IPv4/IPv6 in monospace
+Masked for non-Super-Admin
+Details
+—
+Expandable: shows changed fields diff
+Show/hide toggle per row
+8. UX Microinteractions
+Subtle, purposeful motion that communicates system state without distraction. Enterprise-friendly: never playful, always informative.
+8.1 Transition Duration Standards
+Duration
+Easing
+Usage
+100ms
+ease-out
+Hover state changes, checkbox toggles, badge updates
+150ms
+ease-out
+Button press feedback, tooltip appear/disappear
+200ms
+ease-in-out
+Modal open/close, sidebar collapse/expand, toast appear
+300ms
+ease-in-out
+Page transitions, panel slide-in, bottom sheet
+400ms
+ease-out
+Loading-to-content transitions, skeleton fade-out
+500ms
+spring (0.4, 0, 0.2, 1)
+Success celebration micro (capture confirmed)
+8.2 Key Microinteraction Specs
+OCR Processing Feedback
+Phase
+Animation
+Shutter capture
+White flash overlay: opacity 0.7 → 0 over 200ms
+Processing
+Card image appears with scanning line (linear gradient) moving top-to-bottom at 1.2s repeat
+OCR complete (success)
+Green check mark scales from 0 to 1 over 300ms spring, then field values animate in top-to-bottom staggered 40ms each
+OCR complete (low confidence)
+Amber shake on low-confidence fields (translateX ±4px over 300ms)
+Sync Animations
+State
+Animation
+Syncing (icon)
+Rotate 360deg at 1.5s ease-in-out infinite. Stop rotation when sync completes.
+Sync complete
+Cloud icon morphs to checkmark (if using SVG animation), or cloud → fade → check crossfade 300ms
+Queue counter
+Number decrements with a brief scale-down (scale 0.8) + fade between numbers
+New capture added to queue
+Queue counter bounces: scale 1.2 → 1.0 over 400ms spring
+Session Creation Success
+Modal closes with scale-out (scale 1 → 0.95, opacity 1 → 0) at 200ms ease-in
+New session card slides in from bottom of list with 300ms ease-out + subtle shadow elevation that fades
+Success toast appears: "Session created" with 400ms slide-up entrance
+Relationship Detection
+Match banner slides down from top of OCR review: 300ms ease-out
+Match confidence bar animates from 0% to actual % over 600ms ease-out
+If match > 85%: amber pulsing ring around avatar in match card (2s pulse, 1 cycle only)
+Qualifier Selection (Mobile)
+Tap HOT: card background transitions to red-50 at 150ms, haptic: medium impact
+Tap WARM: amber-50 at 150ms, haptic: light impact
+Tap COLD: blue-50 at 150ms, haptic: light impact
+Auto-advance: qualifier fills screen briefly (300ms) then fades to camera — confidence of selection
+8.3 Rules for Motion
+Motion must earn its place. Every animation either communicates state change, directs attention, or provides confirmation. If it does none of these, remove it.
+Respect prefers-reduced-motion: all animations have a no-motion fallback (instant state change)
+Never animate layout shifts that move content a user is reading
+Loading skeletons should shimmer no faster than 1.5s cycle — faster feels anxious
+Success animations play once — never loop
+Error states never animate repeatedly — static treatment after initial attention-getting
+9. Accessibility System
+WCAG 2.1 AA baseline. Critical flows target AAA. Mobile follows WCAG 2.5 for touch accessibility.
+9.1 Compliance Targets
+Flow
+Target Level
+Critical Considerations
+OCR Review
+AAA
+Color + icon indicators, keyboard OCR field navigation
+Session Management
+AA
+Screen reader announcement of session state changes
+Lead Qualification
+AA
+Non-color qualifier differentiation (shape + label)
+Admin Tables
+AA
+Keyboard navigation, skip links, ARIA live regions for sort/filter
+Auth Flows
+AAA
+Error identification, autocomplete attributes, focus management
+Analytics Charts
+AA
+Alt text data tables as chart alternatives
+9.2 Focus States
+Component
+Focus Indicator
+All interactive elements
+2px solid brand-600, 2px offset — never use outline: none without replacement
+Buttons
+box-shadow: 0 0 0 3px brand-100, 0 0 0 5px brand-600
+Inputs
+box-shadow: 0 0 0 3px brand-100, border 2px brand-600
+Table rows
+Row background brand-50, left border 2px brand-600
+Dark sidebar items
+box-shadow: 0 0 0 2px rgba(255,255,255,0.5) inset
+Mobile (React Native)
+Native focus ring via accessibilityState focused + custom focused style overlay
+9.3 Screen Reader Support
+Pattern
+Implementation
+ARIA roles
+nav, main, aside, dialog, alert, status, progressbar on all structural elements
+ARIA labels
+aria-label on icon-only buttons: "Open settings menu", "Add to qualifier"
+ARIA live regions
+aria-live="polite" on sync status, capture count, toast notification area
+ARIA live (urgent)
+aria-live="assertive" only for errors and critical offline state changes
+Table accessibility
+thead with scope="col", caption element, aria-sort on sorted columns
+Form errors
+aria-invalid="true" + aria-describedby linking to error message ID
+Loading states
+aria-busy="true" on container + aria-label="Loading contacts"
+React Native
+accessibilityRole, accessibilityLabel, accessibilityState on all interactive elements
+9.4 Color Blindness Support
+Scenario
+Solution
+HOT/WARM/COLD distinction
+Color + uppercase label + distinct icon shape (flame / thermometer / snowflake)
+Success/Error states
+Color + icon (check / x) + text label always present
+Chart data series
+Color + distinct line pattern (solid / dashed / dotted) + shape markers
+Sync status
+Color + icon + text label (never color alone)
+OCR confidence
+Color + percentage number always displayed alongside color indicator
+10. Dark Mode System
+Linear/Vercel-quality dark mode. Deep surfaces, minimal borders, purposeful accent use. OLED-optimized for mobile.
+10.1 Dark Mode Palette
+Token
+Light Value
+Dark Value
+Usage
+bg-base
+#F8FAFC
+#0A0F1E
+Page/app background
+bg-surface
+#FFFFFF
+#111827
+Card, panel, modal surface
+bg-surface-2
+#F1F5F9
+#1F2937
+Secondary panel, table alt row
+bg-surface-3
+#E2E8F0
+#374151
+Active state, chip fill
+text-primary
+#0F172A
+#F1F5F9
+Primary headings, body text
+text-secondary
+#334155
+#9CA3AF
+Secondary text, descriptions
+text-muted
+#64748B
+#6B7280
+Placeholders, timestamps
+border-default
+#E2E8F0
+#1F2937
+Card borders, dividers
+border-subtle
+#F1F5F9
+#111827
+Table row separators
+brand-accent
+#1A56DB
+#3B82F6
+Interactive elements (brighter on dark)
+10.2 Dark Mode Surface Hierarchy
+Layer
+Light
+Dark
+Notes
+Z0: Background
+#F8FAFC
+#0A0F1E
+Deepest layer — OLED-friendly near-black
+Z1: Base cards
+#FFFFFF
+#111827
+Standard card elevation
+Z2: Elevated cards
+#FFFFFF + shadow
+#1F2937
+Use bg color, NOT heavier shadow in dark
+Z3: Modals
+#FFFFFF
+#1F2937
+Modal background, slight bg elevation vs Z1
+Z4: Dropdowns/Tooltips
+#FFFFFF
+#374151
+Floating UI elements
+Z5: Sticky headers
+#FFFFFF + border
+#0A0F1E + 1px #1F2937
+Table headers stick above content
+In dark mode, elevation is conveyed through background lightness, NOT shadows. Deeper = darker. Higher = slightly lighter. This is the Linear/Vercel approach.
+10.3 Dark Mode Sidebar
+Element
+Dark Value
+Sidebar background
+#060D1A — near-black, slightly blue-shifted for brand depth
+Active item background
+rgba(59, 130, 246, 0.15) — brand-500 at 15% opacity
+Active item text
+#F1F5F9
+Active item left border
+3px solid #3B82F6
+Default item text
+#9CA3AF
+Hover item background
+rgba(255, 255, 255, 0.05)
+Section labels
+#4B5563 uppercase
+Dividers
+#1F2937
+10.4 Charts in Dark Mode
+Grid lines: 1px #1F2937 (very subtle — grids should not compete with data)
+Axis labels: #6B7280 text
+Bars/Lines: brand-400 (#60A5FA) instead of brand-600 for better dark contrast
+Bar hover: brand-300 (#93C5FD)
+Tooltip background: #1F2937, border #374151, text #F1F5F9
+Area fill under lines: brand-500 at 15% opacity
+10.5 Mobile Dark Mode (OLED)
+Page background: #000000 (pure black for OLED power efficiency)
+Cards on black: #0F172A (just barely lifted from pure black)
+Separator lines: #1E293B (not visible at 0% brightness, subtle at normal)
+The capture camera screen is always dark-mode-like regardless of system setting (camera = dark)
+OCR overlay guide border: brand-500 (#3B82F6) remains visible on dark camera background
+11. Design Tokens
+Tailwind-compatible token naming. JSON structure for design-to-code pipeline. Supports light/dark themes.
+11.1 Color Tokens (JSON)
+{
+  "color": {
+    "brand": {
+      "50": "#EFF6FF", "100": "#DBEAFE", "200": "#BFDBFE",
+      "400": "#60A5FA", "500": "#3B82F6", "600": "#1A56DB",
+      "700": "#1E40AF", "800": "#1E3A5F", "950": "#0F172A"
+    },
+    "neutral": {
+      "50": "#F8FAFC",  "100": "#F1F5F9", "200": "#E2E8F0",
+      "400": "#94A3B8", "500": "#64748B", "700": "#334155",
+      "900": "#1E293B", "950": "#0F172A"
+    },
+    "success": { "50": "#F0FDF4", "600": "#16A34A" },
+    "warning": { "50": "#FFFBEB", "500": "#F59E0B" },
+    "error":   { "50": "#FEF2F2", "600": "#DC2626" },
+    "info":    { "50": "#F0F9FF", "500": "#0EA5E9" },
+    "qualifier": {
+      "hot":  { "bg": "#FEF2F2", "text": "#DC2626", "border": "#FECACA" },
+      "warm": { "bg": "#FFFBEB", "text": "#D97706", "border": "#FDE68A" },
+      "cold": { "bg": "#EFF6FF", "text": "#1A56DB", "border": "#BFDBFE" }
+    }
+  }
+}
+11.2 Spacing Tokens
+{
+  "spacing": {
+    "0": "0px",   "1": "4px",  "2": "8px",  "3": "12px",
+    "4": "16px",  "5": "20px", "6": "24px", "8": "32px",
+    "10": "40px", "12": "48px","16": "64px","20": "80px"
+  }
+}
+11.3 Radius, Shadow & Z-Index Tokens
+{
+  "radius": {
+    "none": "0",    "sm": "4px",  "md": "6px",
+    "lg": "8px",    "xl": "12px", "2xl": "16px",
+    "full": "9999px"
+  },
+  "shadow": {
+    "xs":  "0 1px 2px rgba(0,0,0,0.05)",
+    "sm":  "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)",
+    "md":  "0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06)",
+    "lg":  "0 10px 15px rgba(0,0,0,0.07), 0 4px 6px rgba(0,0,0,0.05)",
+    "xl":  "0 20px 25px rgba(0,0,0,0.08), 0 10px 10px rgba(0,0,0,0.04)",
+    "modal": "0 25px 50px rgba(0,0,0,0.12)"
+  },
+  "zIndex": {
+    "base": 0, "raised": 10, "dropdown": 100, "sticky": 200,
+    "overlay": 300, "modal": 400, "toast": 500, "tooltip": 600
+  }
+}
+11.4 Typography Tokens
+{
+  "font": {
+    "family": {
+      "sans": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      "mono": "'JetBrains Mono', 'Fira Code', 'Consolas', monospace"
+    },
+    "size": {
+      "xs": "12px", "sm": "13px", "base": "14px", "md": "16px",
+      "lg": "18px", "xl": "20px", "2xl": "24px", "3xl": "30px",
+      "4xl": "36px", "5xl": "48px"
+    },
+    "weight": { "normal": 400, "medium": 500, "semibold": 600, "bold": 700 },
+    "lineHeight": {
+      "tight": 1.2, "snug": 1.375, "normal": 1.5, "relaxed": 1.625, "loose": 2
+    },
+    "tracking": { "tight": "-0.02em", "normal": "0em", "wide": "0.05em", "widest": "0.1em" }
+  }
+}
+12. Iconography & Illustration Style
+Lucide Icons as primary icon library. Phosphor for supplementary OCR/event-specific icons. Minimal, geometric empty state illustrations.
+12.1 Icon Library Selection
+Library
+Role
+Rationale
+Usage
+Lucide React
+Primary UI icons
+Clean geometric line style, excellent React support, MIT license, consistent stroke weights, large coverage
+Navigation, actions, status indicators, form icons
+Phosphor Icons
+Supplementary
+Better OCR/camera/scanning icons, Duotone style available for empty states
+Camera, scan, card, badge, conference icons
+Custom SVG
+Brand-specific
+CardVault logo, HOT/WARM/COLD flame/thermometer/snowflake qualifier icons
+Qualifier UI, product identity
+12.2 Icon Style Specification
+Property
+Value
+Notes
+Stroke width
+1.5px (default)
+1.25px for dense tables; 2px for emphasis/filled variants
+Corner radius
+Inherit from icon shape
+Lucide uses 2px internal radius — do not adjust
+Size system
+16px / 18px / 20px / 24px / 32px / 48px
+16 table cells, 20 nav items, 24 headings, 48 empty states
+Color
+Inherits currentColor
+Always use color classes, never hardcode icon colors
+Optical alignment
+Visual center, not mathematical center
+Use visual-center correction for icons in buttons
+Duotone treatment
+Phosphor Duotone for empty state hero icons only
+40% opacity for secondary layer
+12.3 OCR-Specific Iconography
+Icon Concept
+Source
+Size
+Usage Context
+Camera / Scan trigger
+Lucide: camera, scan
+24px
+Capture FAB, camera screen CTA
+Card detected
+Phosphor: identification-card
+24px
+OCR overlay card-detected state
+Blur warning
+Custom: concentric circles blur
+20px
+Blur detection feedback
+OCR processing
+Lucide: cpu (spinning)
+20px
+Processing state in review screen
+Confidence high
+Lucide: check-circle-2
+16px
+High confidence field indicator
+Confidence low
+Lucide: alert-circle
+16px
+Low confidence field indicator
+Relationship match
+Lucide: git-merge
+20px
+Existing contact detection
+Sync pending
+Lucide: cloud-upload (spinning)
+20px
+Offline queue indicator
+Sync complete
+Lucide: cloud-check
+20px
+Successful sync indicator
+Qualifier HOT
+Custom SVG: flame
+16px
+HOT qualifier chip
+Qualifier WARM
+Custom SVG: thermometer
+16px
+WARM qualifier chip
+Qualifier COLD
+Custom SVG: snowflake
+16px
+COLD qualifier chip
+12.4 Empty State Illustration Strategy
+Empty State
+Illustration Style
+Copy Pattern
+No contacts
+Single Phosphor card-duotone icon at 64px in brand-200, below: simple abstract person outline
+"No contacts yet — start scanning business cards at your next event"
+No sessions
+Calendar + sparkle illustration
+"Create your first session to start capturing leads"
+No data (analytics)
+Bar chart outline with question mark
+"No data for this period — try adjusting the date range"
+Offline — no queue
+WiFi-off icon in amber, minimal
+"You're offline. Captures will save and sync when reconnected."
+Search no results
+Magnifying glass with ×
+"No matches found — try a different search term"
+Role restricted
+Lock icon, neutral
+"You don't have permission to view this. Contact your admin."
+Illustration style: Line-based, single-color brand-200 or neutral-200. Never stock photography. Never complex scene illustrations. Simple iconic representations that load instantly and feel purpose-built.
+13. Branding Direction
+CardVault positions as premium enterprise SaaS — intelligent, trustworthy, fast. Visual identity communicates precision, not personality.
+13.1 Brand Voice
+Dimension
+CardVault Voice
+Anti-Pattern
+Tone
+Direct, precise, professional
+Casual, playful, startup-quirky
+Vocabulary
+Specific: "capture", "qualify", "encounter", "session"
+Generic: "add", "save", "contact"
+Error messages
+Explain what happened + what to do: "OCR failed — tap to retry or enter manually"
+Vague: "Something went wrong" with no action
+Success messages
+Confirm the outcome: "Sarah Chen captured and queued for sync"
+Generic: "Done!" or "Success!"
+Empty states
+Action-oriented: tell the user what to do next
+Apologetic: "Sorry, nothing here"
+Onboarding
+Task-focused: what can I do first?
+Feature-focused: here's everything we offer
+13.2 Logo Direction
+Element
+Specification
+Concept
+Abstract: business card + data flow + capture moment. Not literal icons. Geometric, modern.
+Symbol
+Stylized card corner with a scan-line arc — suggests both the physical card and digital capture
+Wordmark
+"CardVault" set in Inter, weight 600, letter-spacing -0.02em. "Card" in brand-600, "Vault" in neutral-950
+Minimum size
+24px height (symbol only), 80px (symbol + wordmark)
+Clear space
+1× symbol height on all sides
+Light background
+Full color: symbol brand-600 + wordmark as above
+Dark background
+Symbol white, wordmark white
+Don't
+Stretch, rotate, recolor outside defined palette, add effects, use on busy backgrounds
+13.3 Enterprise Trust Signals
+Signal
+Implementation
+Role-based access
+Visible role badge on user avatar in sidebar — "Admin", "Event Manager" etc.
+Audit trail
+Audit log always accessible to admins — communicates that all actions are tracked
+Sync transparency
+Always-visible sync status — users know their data is safe
+Data masking
+Sensitive fields (email, phone) show partial mask in table views unless expanded
+Session security
+API key displayed as ••••••••••••XXXX format — last 4 visible only
+Encryption indicators
+Lock icon on data export, sync events — visual assurance
+Organization isolation
+Org name + logo always visible in sidebar — multi-tenant separation is visually confirmed
+14. Responsive Design Rules
+Mobile-first CSS, adaptive layouts, touch-and-mouse parity.
+14.1 Breakpoint System
+Name
+Min Width
+Tailwind Prefix
+Layout Notes
+Mobile
+0px
+(default)
+4-col grid, bottom nav, full-width cards, stacked layout
+Mobile-lg
+480px
+xs:
+Wider cards, 2-col compact grids
+Tablet
+768px
+md:
+8-col grid, sidebar overlay, topbar only
+Desktop-sm
+1024px
+lg:
+12-col grid, fixed sidebar 256px, condensed content
+Desktop
+1280px
+xl:
+Standard dashboard layout, max 1440px content
+Wide
+1536px
+2xl:
+Ultra-wide: extra gutter space, analytics 3-column
+14.2 Component Adaptation Rules
+Component
+Mobile
+Tablet
+Desktop
+Navigation
+Bottom tab bar
+Overlay sidebar + top bar
+Fixed sidebar + top bar
+Data tables
+Card list view (no table)
+Table with horizontal scroll
+Full table, column resize
+Modals
+Bottom sheet (full width)
+Centered modal (560px)
+Centered modal (560–960px)
+Charts
+Single KPI stack
+2-col KPI + chart row
+4-col KPI + full chart grid
+Filters
+Bottom sheet filter panel
+Inline filter bar
+Sidebar filter panel
+Actions
+FAB + bottom sheet
+Button row + context menu
+Full button row visible
+14.3 Touch vs Mouse Interaction
+Interaction
+Mouse
+Touch
+Hover states
+Full hover styling on all interactive elements
+No hover states (use @media (hover: hover))
+Context menus
+Right-click
+Long press (500ms threshold)
+Drag and drop
+Click-hold-drag
+Touch-hold-drag (same, native gesture)
+Tooltips
+Appear on hover after 300ms delay
+Appear on long press, dismiss on next tap
+Table row actions
+Appear on row hover
+Appear via swipe or long press
+Keyboard shortcuts
+Fully supported on web dashboard
+Not applicable on mobile
+15. UI Engineering Guidelines
+Practical guidance for implementation teams. Token-driven theming, shared design system between web and mobile.
+15.1 TailwindCSS Architecture
+Concern
+Approach
+Custom tokens
+Extend tailwind.config.js with design token values from Section 11. Never hardcode hex values in JSX.
+Component variants
+Use cva (class-variance-authority) for component variant management. Define base + variant + compoundVariant.
+Dark mode
+class strategy (not media) for user-toggled dark mode. Apply dark: prefixes from design token dark values.
+Font loading
+next/font for Inter + JetBrains Mono with display: swap. Subset to Latin only.
+Animation
+tailwindcss-animate plugin + custom keyframes in tailwind.config for branded animations.
+Responsive utilities
+Mobile-first: base = mobile, md/lg/xl prefixes for larger. Never desktop-first.
+15.2 React Native Styling Approach
+Concern
+Approach
+Styling library
+NativeWind (Tailwind for React Native) for web-mobile token consistency
+Design tokens
+Shared tokens package (@cardvault/tokens) consumed by both web + mobile
+Platform differences
+Platform.select() for shadow (iOS boxShadow vs Android elevation)
+Typography
+Expo Google Fonts for Inter. Dynamic font scaling: useWindowDimensions + scale factor
+Safe areas
+react-native-safe-area-context throughout. Never hardcode status bar heights.
+Gesture handling
+react-native-gesture-handler for swipe qualifiers, drag-to-sort.
+Animation
+react-native-reanimated 3.x for all animations. Never Animated API for complex flows.
+15.3 Component Architecture
+Layer
+Description
+Primitives
+Unstyled accessible base: Button, Input, Dialog, Select — built on Radix UI (web) / custom (RN)
+Design System Components
+Styled with design tokens: CardVaultButton, CardVaultInput, QualifierChip, SessionCard
+Feature Components
+Business logic: OCRReviewForm, ContactCard, SessionSwitcher, AuditLogTable
+Page Components
+Full screen compositions: DashboardOverview, ContactsPage, SessionManagement
+Shared tokens package
+@cardvault/tokens: exports JS objects + CSS custom properties. Single source of truth.
+15.4 Theme Architecture
+Concern
+Implementation
+Token delivery (web)
+CSS custom properties on :root (light) and .dark class (dark mode)
+Token delivery (RN)
+React Context: ThemeProvider wraps app, useTheme() hook returns token values
+Theme switching
+localStorage preference + system prefers-color-scheme fallback
+SSR safety
+Avoid flash: inline script sets .dark class before first paint based on stored preference
+Token updates
+Tokens defined once in @cardvault/tokens, built to both CSS vars (web) and JS object (RN)
+Appendix A — Quick Reference
+A.1 Design Decision Summary
+Decision
+Choice
+Rationale
+Primary color
+#1A56DB (brand-600)
+Professional blue: trust, technology, enterprise
+Type scale base
+14px
+Optimized for data-dense tables and forms
+Font family
+Inter (Variable)
+Best enterprise legibility at small sizes
+Grid system
+8pt base, 12-col
+Industry standard, Tailwind compatible
+Spacing unit
+4pt (0.25rem)
+Fine-grained control for dense layouts
+Border radius
+6–8px
+Modern without being playful
+Icon library
+Lucide + Phosphor
+Consistent stroke, great coverage
+Animation approach
+CSS + Framer Motion (web) / Reanimated (RN)
+Performance-first, accessible
+Dark mode strategy
+Class-based, bg elevation model
+Linear/Vercel quality, OLED-friendly
+Mobile navigation
+Bottom tab bar (5 items)
+Thumb-accessible, industry standard
+A.2 Component Status Checklist
+Component
+Priority
+Platform
+Text input
+P0
+Web + Mobile
+OCR Review field
+P0
+Mobile
+Qualifier selector
+P0
+Mobile
+Camera overlay
+P0
+Mobile
+Contact card
+P0
+Web + Mobile
+Session card
+P0
+Web + Mobile
+KPI card
+P0
+Web
+Data table
+P0
+Web
+Sidebar navigation
+P0
+Web
+Bottom navigation
+P0
+Mobile
+Toast notification
+P0
+Web + Mobile
+Offline indicator
+P0
+Mobile
+Skeleton loader
+P1
+Web + Mobile
+Bulk action bar
+P1
+Web
+Analytics charts
+P1
+Web
+Audit log table
+P1
+Web
+Relationship history panel
+P1
+Mobile
+Funnel visualization
+P2
+Web
+OCR monitoring dashboard
+P2
+Web
+Dark mode (complete)
+P2
+Web + Mobile
+CardVault v3.0 — UI/UX Design Specification
+Document Version 1.0  ·  Enterprise Product Design  ·  Confidential

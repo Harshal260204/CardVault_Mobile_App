@@ -1,0 +1,886 @@
+CARDVAULT
+v3.0 — Context-Aware Capture Edition
+Technical Requirements Document
+For Senior Engineers & Solution Architects
+Field
+Detail
+Document Version
+TRD v3.0
+Source Document
+CardVault PRD v3.0 — Context-Aware Capture Edition
+Status
+DRAFT — FOR ENGINEERING REVIEW
+Audience
+Senior Engineers, Solution Architects, Tech Leads
+Platform
+CardVault Enterprise SaaS
+Last Revised
+May 2026
+1. System Overview
+1.1 High-Level Architecture
+CardVault is a multi-tenant SaaS platform with four distinct tiers:
+Client Tier: React Native Android APK (OCR on-device via Google ML Kit) + React/TS Admin Dashboard
+API Tier: NestJS REST API behind reverse proxy with JWT middleware and rate limiting
+Service Tier: BullMQ job workers (OCR, dedup, image processing, sync, relationship matching)
+Data Tier: PostgreSQL 15 (Supabase managed, RLS-enforced) + Supabase Storage (S3-compatible)
+┌─────────────────────────────────────────────────────────────┐
+│               CLIENT TIER                                   │
+│  React Native APK          Admin Dashboard (React/TS)       │
+│  Visitor | Exhibitor | QC   Sessions / Lead Funnel / Audit  │
+│  ML Kit OCR · Zustand · SQLite offline queue                │
+└─────────────────────┬───────────────────────────────────────┘
+│  HTTPS TLS 1.3 · JWT RS256
+┌─────────────────────▼───────────────────────────────────────┐
+│       API GATEWAY (Rate Limiting · Auth · CORS)             │
+└─────────────────────┬───────────────────────────────────────┘
+┌─────────────────────▼───────────────────────────────────────┐
+│          NestJS SERVICE TIER (Node.js 20 LTS)               │
+│  Sessions│Encounters│RelHistory│Qualifier│Contacts│OCR     │
+│  ─────────────── BullMQ Job Queues ──────────────────       │
+│  ocr·dedup·image·export·sync·audit·rel-match·session-cnt   │
+└──────────────┬──────────────────────┬──────────────────────┘
+┌─────────────▼────────┐    ┌─────────▼──────────────────────┐
+│  Supabase PG 15      │    │   Supabase Storage (S3)        │
+│  RLS · PgBouncer     │    │   org/{session}/{contact}/     │
+│  Redis (Upstash)     │    │   AES-256 · CDN signed URLs    │
+└──────────────────────┘    └────────────────────────────────┘
+1.2 Core Platform Components
+Component
+Technology
+Responsibility
+Mobile App
+React Native 0.74+
+Card capture (3 modes), on-device OCR, offline queue, sync
+API Server
+NestJS / Node.js 20 LTS
+Business logic, auth, RBAC, data ingestion
+Job Workers
+BullMQ + Redis
+Async OCR, dedup, image processing, relationship matching, export
+Database
+PostgreSQL 15 (Supabase)
+Multi-tenant data, RLS, full-text search
+Object Storage
+Supabase Storage (S3)
+Business card images, signed URL delivery
+Cache / Queue
+Redis (Upstash Serverless)
+Rate limiting, session counter buffer, token blocklist
+Admin Dashboard
+React 18 + TypeScript + Tailwind
+Ops visibility, session management, analytics
+1.3 Main Technical Workflows
+Capture: Mode select → OCR (on-device ML Kit) → review/qualify → relationship check → contact write + encounter append → session counter increment
+Offline Sync: Local SQLite queue → background sync on reconnect → idempotency-keyed ingestion → session counter reconciliation
+Relationship Match: Post-ingest job → fuzzy match on email/phone/name+company → push history card to mobile → user decision (add encounter / new / view)
+Export: Manager triggers per-session CSV export → BullMQ export-generation job → signed download URL returned
+Auth: Login → Supabase Auth → JWT (RS256, 1hr TTL) + refresh token (30d, rotating) → org_id + role claims on every request
+2. Technology Stack
+Layer
+Technology
+Version / Notes
+Mobile
+React Native
+0.74+ · Android 10+ (API 29+) · APK via MDM
+State Management
+Zustand
+4.x · Stores: auth, contacts, capture, session, encounter, relationship, sync, ui
+OCR Engine
+Google ML Kit Text Recognition V2
+On-device; bundled in APK; no runtime download
+Camera
+React Native Vision Camera
+Real-time preview, auto-focus, blur detection
+Backend Framework
+NestJS
+Node.js 20 LTS · TypeScript-first · DI container
+API Protocol
+REST + Supabase Realtime
+REST for transactions; Realtime for dashboard live updates
+Database
+PostgreSQL 15
+Supabase managed · PgBouncer (transaction mode)
+Authentication
+Supabase Auth + JWT RS256
+Asymmetric signing; jti blocklist in Redis
+Object Storage
+Supabase Storage
+S3-compatible · AES-256 at rest · signed URLs
+Job Queue
+BullMQ
+Redis-backed; 8 named queues; independent worker scaling
+Cache
+Redis (Upstash Serverless)
+Rate limiting, session counter buffer, token revocation
+Offline Storage
+SQLite (device-local)
+react-native-sqlite-storage; pending_captures + cached_sessions
+Admin Dashboard
+React 18 + TypeScript + Tailwind CSS
+Standalone SPA; deployed on Vercel/Cloudflare Pages
+Monitoring
+Sentry + Datadog APM
+Error tracking + distributed tracing + infra metrics
+CI/CD
+GitHub Actions + Docker
+Lint → test → security scan → staging → manual gate → prod
+3. Application Architecture
+3.1 React Native App Structure
+src/
+├── screens/          # Home, SessionCreate, SessionBrowser, EncounterTagger,
+│                     # CameraCapture, OCRReview (×3 modes), RelHistory,
+│                     # SessionView, ContactDetail, ContactSearch, SyncStatus
+├── stores/           # authStore, contactsStore, captureStore, sessionStore,
+│                     # encounterStore, relationshipStore, syncStore, uiStore
+├── services/         # api.ts, ocr.ts, storage.ts, sync.ts, notifications.ts
+├── navigation/       # React Navigation stack + tab navigator
+└── components/       # Shared UI: QualifierButtons, ModeCard, EncounterTile
+3.2 NestJS Module Architecture
+src/modules/
+├── auth/          sessions, JWT validation, token rotation
+├── contacts/      CRUD, deduplication engine, full-text search, merge
+├── sessions/      [v3.0] event session CRUD, team management, counter
+├── encounters/    [v3.0] contact encounter history append/read
+├── relationship/  [v3.0] cross-event match engine
+├── qualifier/     [v3.0] lead qualifier read/write
+├── ocr/           job submission, field classification, confidence scoring
+├── images/        upload URL, thumbnail generation, signed URL retrieval
+├── export/        per-session CSV with qualifier filter
+├── analytics/     org/platform/session/lead-funnel/encounter-type metrics
+├── admin/         tenant management, audit log browser, OCR monitoring
+├── users/         invite, deactivate, role management
+├── organizations/ tenant CRUD, provisioning, deprovisioning
+└── health/        liveness + readiness probes
+Request middleware pipeline (in order):
+CorrelationIdMiddleware → TenantContextMiddleware → JwtAuthGuard → TenantGuard → RolesGuard → ValidationPipe → LoggingInterceptor → TransformInterceptor
+3.3 State Management Structure
+Store
+Key State
+Notes
+authStore
+JWT tokens, user profile, session expiry
+Persisted to device secure storage
+sessionStore
+activeVisitorSession, activeExhibitorSession, sessionContacts, sessionStats
+v3.0 — cached locally for offline use
+encounterStore
+selectedEncounterType, leadQualifier, quickNote, followUpDate
+v3.0 — no network required
+relationshipStore
+matchResults, userDecision, pendingMatches
+v3.0 — populated by push from API
+syncStore
+offlineQueue, syncStatus, pendingCount, failedItems
+Drives sync status screen
+captureStore
+activeCaptureState, ocrProgress, reviewData
+Cleared after each capture
+contactsStore
+contactListCache, searchResults, pagination
+LRU-evicted; refetched on reconnect
+3.4 Offline Sync Architecture
+State
+Trigger
+Action
+OFFLINE
+Network lost
+All writes → local SQLite (session_id, capture_mode, qualifier, encounter_type)
+CONNECTING
+Network restored
+Background sync service activates; session counters begin reconciliation
+SYNCING
+Service running
+FIFO queue drain; image upload; OCR submit; session counter sync
+CONFLICT
+Server 409
+Server-wins; local version archived in sync_queue
+COMPLETE
+Queue empty
+Sync timestamp updated; relationship checks run; UI refresh
+ERROR
+Repeated failure
+Move to dead-letter queue; surface in Sync Status screen
+Idempotency: every offline capture carries a client-generated client_idempotency_key (UUID v4). Server deduplicates on ingest, returning HTTP 200 if already processed.
+Session counter reconciliation: server_count + unsynced_offline_captures = reconciled total. Handled by session-counter-sync BullMQ queue on each sync cycle.
+4. Database Design
+4.1 Schema Summary
+v3.0 adds 3 new tables and 4 new columns to contacts. All changes are additive and backward-compatible. v1.0 data requires no migration beyond ALTER TABLE.
+Table
+Type
+Key Columns
+organizations
+Existing
+id, name, slug, plan, settings JSONB, max_users, storage_quota_gb, is_active
+users
+Existing
+id, organization_id, supabase_uid, email, role (employee|manager|super_admin), is_active
+contacts
+Updated (additive)
+... + capture_mode, event_session_id FK, encounter_type, lead_qualifier
+event_sessions
+NEW
+id, organization_id, created_by, name, mode, event_type, start/end_date, status, scan_count, hot/warm/cold_count
+session_members
+NEW
+id, session_id, user_id, organization_id, joined_at — UNIQUE(session_id, user_id)
+contact_encounters
+NEW
+id, contact_id, organization_id, session_id, captured_by, capture_mode, encounter_type, encounter_label, lead_qualifier, lead_note, follow_up_date, card_image_id
+ocr_jobs
+Updated (additive)
+... + session_id FK, capture_mode
+card_images
+Existing
+id, organization_id, contact_id, storage_path, file_size, mime_type, dimensions, status
+audit_events
+Existing
+id, organization_id, actor_id, event_type, entity_type, entity_id, event_data JSONB, ip_address, correlation_id
+4.2 New Table DDL Sketches
+-- event_sessions
+CREATE TABLE event_sessions (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+created_by      UUID NOT NULL REFERENCES users(id),
+name            TEXT NOT NULL,
+mode            TEXT NOT NULL CHECK (mode IN ('visitor','exhibitor','quick_capture')),
+event_type      TEXT,  -- trade_show|conference|product_demo|networking|other
+location        TEXT,
+start_date      DATE NOT NULL DEFAULT CURRENT_DATE,
+end_date        DATE,
+status          TEXT NOT NULL DEFAULT 'active'
+CHECK (status IN ('active','closed','archived')),
+scan_count      INTEGER NOT NULL DEFAULT 0,
+hot_count       INTEGER NOT NULL DEFAULT 0,
+warm_count      INTEGER NOT NULL DEFAULT 0,
+cold_count      INTEGER NOT NULL DEFAULT 0,
+settings        JSONB NOT NULL DEFAULT '{}',
+created_at      TIMESTAMPTZ DEFAULT NOW(),
+updated_at      TIMESTAMPTZ DEFAULT NOW(),
+deleted_at      TIMESTAMPTZ
+);
+-- contact_encounters
+CREATE TABLE contact_encounters (
+id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+contact_id      UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+organization_id UUID NOT NULL REFERENCES organizations(id),
+session_id      UUID REFERENCES event_sessions(id),
+captured_by     UUID NOT NULL REFERENCES users(id),
+capture_mode    TEXT NOT NULL CHECK (capture_mode IN ('visitor','exhibitor','quick_capture','legacy')),
+encounter_type  TEXT,  -- flight|b2b|airport|dinner|referral|hallway|other
+encounter_label TEXT,  -- free-text when encounter_type = 'other'
+lead_qualifier  TEXT CHECK (lead_qualifier IN ('hot','warm','cold')),
+lead_note       TEXT,
+follow_up_date  DATE,
+card_image_id   UUID REFERENCES card_images(id),
+ocr_job_id      UUID REFERENCES ocr_jobs(id),
+notes           TEXT,
+created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+4.3 Critical Indexes
+Table
+Index
+Type
+Purpose
+contacts
+search_vector (generated tsvector)
+GIN
+Full-text search: name, company, email, tags
+contacts
+(organization_id, capture_mode)
+B-Tree
+Mode-based analytics and filter queries
+contacts
+(event_session_id)
+B-Tree
+Session contact list; WHERE deleted_at IS NULL
+contacts
+(event_session_id, lead_qualifier)
+B-Tree
+Lead funnel filtering and export
+contacts
+emails (array)
+GIN
+Email deduplication lookups
+event_sessions
+(organization_id, status)
+B-Tree
+Admin session list queries
+event_sessions
+(organization_id, mode, start_date)
+B-Tree
+Mode-filtered session analytics
+contact_encounters
+(contact_id, created_at DESC)
+B-Tree
+Relationship history timeline (hot path)
+contact_encounters
+(session_id)
+B-Tree
+Session-scoped encounter queries
+ocr_jobs
+(organization_id, mean_confidence)
+B-Tree
+OCR quality analytics
+audit_events
+(organization_id, created_at DESC)
+B-Tree
+Audit log time-range queries
+4.4 Multi-Tenant Considerations
+Every table includes organization_id as a non-nullable FK. RLS policies enforce: SELECT/INSERT/UPDATE/DELETE restricted to rows where organization_id = auth.jwt()->>'organization_id'.
+audit_events is append-only — no UPDATE or DELETE RLS granted.
+event_sessions and contact_encounters have organization_id with RLS; cross-tenant access is blocked at DB layer before API layer.
+Storage bucket paths are org-namespaced: {org_id}/sessions/{session_id}/{contact_id}/.
+At 100M+ contacts: partition contacts by organization_id hash. contact_encounters partition by created_at year at 50M+ rows.
+scan_count hot-path mitigation: increment buffered in Redis, flushed to PG in 5-second batches (avoids row-lock contention during high-volume exhibitor scans).
+5. API Design
+5.1 Conventions
+Base path: /api/v1/. URI versioning; 12-month deprecation window.
+All responses wrapped in: { data, meta, error: { status, code, message, correlationId, timestamp } }.
+Custom error codes: OCR_CONFIDENCE_TOO_LOW, DUPLICATE_CONTACT_DETECTED, SESSION_CLOSED, RELATIONSHIP_MATCH_FOUND.
+Rate limits: 1,000 req/15 min (global); 30/min OCR; 20/min image upload; 5/hr export. State in Redis.
+5.2 Key Endpoints
+Module
+Endpoint
+Method
+Role
+Auth
+/auth/login
+POST
+Public
+Auth
+/auth/refresh
+POST
+Public
+Auth
+/auth/logout
+POST
+Any
+Contacts
+/contacts
+GET / POST
+Employee+
+Contacts
+/contacts/:id
+GET / PUT / DELETE
+Employee+
+Contacts
+/contacts/search
+GET
+Employee+
+Contacts
+/contacts/export
+POST
+Manager+
+Contacts
+/contacts/:id/encounters
+GET
+Employee+
+Sessions
+/sessions
+POST / GET
+Employee+
+Sessions
+/sessions/:id
+GET / PATCH
+Employee+
+Sessions
+/sessions/:id/close
+POST
+Employee+
+Sessions
+/sessions/:id/join
+POST
+Employee+
+Sessions
+/sessions/:id/members
+POST
+Employee+
+Sessions
+/sessions/:id/stats
+GET
+Employee+
+Sessions
+/sessions/:id/export
+POST
+Manager+
+Encounters
+/encounters/:id
+PATCH
+Employee+
+Relationship
+/relationship/match
+POST
+Employee+
+OCR
+/ocr/submit
+POST
+Employee+
+OCR
+/ocr/jobs/:id
+GET
+Employee+
+OCR
+/ocr/reprocess/:id
+POST
+Manager+
+Images
+/images/upload-url
+POST
+Employee+
+Images
+/images/:id/confirm
+POST
+Employee+
+Images
+/images/:id/url
+GET
+Employee+
+Analytics
+/analytics/lead-funnel
+GET
+Manager+
+Analytics
+/analytics/encounter-types
+GET
+Manager+
+Analytics
+/analytics/sessions
+GET
+Manager+
+Analytics
+/analytics/platform
+GET
+Super Admin
+Admin
+/admin/organizations
+GET / POST
+Super Admin
+Admin
+/admin/audit-logs
+GET
+Manager+
+Health
+/health
+GET
+Public
+5.3 OCR Submit Payload (v3.0 extended)
+POST /api/v1/ocr/submit
+{
+"card_image_id":    "uuid",
+"extracted_fields": { "full_name": "...", "emails": [], "phones": [], ... },
+"confidence_scores": { "full_name": 0.92, "emails": 0.98, ... },
+"capture_mode":     "visitor" | "exhibitor" | "quick_capture" | "legacy",
+"session_id":       "uuid | null",
+"lead_qualifier":   "hot" | "warm" | "cold" | null,
+"lead_note":        "string (max 160 chars) | null",
+"encounter_type":   "flight" | "b2b" | "airport" | "dinner" | "referral" | "hallway" | "other" | null,
+"encounter_label":  "string (max 40 chars) | null",
+"follow_up_date":   "YYYY-MM-DD | null",
+"client_idempotency_key": "uuid"
+}
+5.4 Relationship History Response
+POST /api/v1/relationship/match — triggered async post-ingest
+{
+"match_found":   true,
+"contact_id":    "uuid",
+"contact_name":  "Jane Smith",
+"prior_sessions": [
+{ "session_name": "TechExpo 2025", "date": "2025-11-14",
+"captured_by": "Alice Johnson", "lead_qualifier": "hot" }
+],
+"match_confidence": 0.96
+}
+Client receives this via push / long-poll, presents Relationship History card with three choices: add_encounter | create_new | view_existing.
+6. Core Functional Flows
+6.1 Visitor Flow
+Tap Visitor → check for active Visitor session in sessionStore
+No active session: Join existing (org-shared list) or Create new (name + event_type + date + optional GPS location)
+Camera opens with session name in header; session_id scoped to capture
+Post-OCR review: editable fields + optional note → save → contact.event_session_id = session.id
+Relationship match job fires async; history card displayed if match found
+Session view: scrollable list of contacts in session, filterable by date/note
+6.2 Exhibitor Flow
+Tap Exhibitor → create booth session (name + event_type + date range + team assignment)
+Multiple team members share one session_id; scan counts aggregate server-side
+Post-OCR: Lead Qualifier screen (HOT/WARM/COLD large tap targets) + 160-char note
+Auto-advance after 3s if no note entered (speed mode); camera reopens immediately
+Live session summary: total, HOT, WARM, COLD, unqualified counts (Redis-buffered, 5s flush)
+Manager: export session CSV filtered by qualifier tier
+6.3 Quick Capture Flow
+Tap Quick Capture → Encounter type selector (7 tiles; default = last-used)
+Camera opens; post-OCR: encounter type (pre-filled, editable) + 200-char note + optional follow-up date
+Follow-up date → local device notification (no third-party push without opt-in)
+Contact saved with encounter_type; no session_id (null); org-wide visible
+6.4 Relationship History Flow
+Post-OCR ingest → relationship-matching BullMQ job → fuzzy match on normalized email, phone, name+company (Levenshtein ≤0.85 threshold, scoped to organization_id)
+Match found: push to client with prior session names, dates, captured_by, qualifier
+User choice: (a) Add encounter → new contact_encounters row appended; (b) Create new → independent contact created; (c) View existing → navigate to contact detail
+Contact detail screen: full encounter history timeline ordered by created_at DESC
+6.5 Offline Sync Flow
+Capture offline → write to pending_captures (SQLite) with all v3.0 fields
+On reconnect: sync service drains queue FIFO → POST /api/v1/ocr/submit with client_idempotency_key
+Server: check idempotency_key in cache → 200 (already processed) or 201 (new)
+Session counter: session-counter-sync job reconciles local count vs server count
+Relationship matching deferred until sync; batched relationship checks post-sync
+7. Security Architecture
+7.1 JWT Auth
+Algorithm: RS256 (asymmetric); private key in secrets manager
+Claims: sub (user_id), org (organization_id), role, iat, exp (1h), jti
+Refresh tokens: 30-day expiry, rotated on every use; previous token invalidated
+Token revocation: jti blocklist in Redis with TTL = remaining token expiry
+Auth rate limit: 5 failed attempts per 15 min per IP → 429 with Retry-After
+7.2 RBAC
+Resource
+Employee
+Manager
+Super Admin
+Contacts (CRUD)
+Own org
+Own org
+Any org
+Contact Export
+No
+Own org
+Any org
+Event Sessions (Create/Join)
+Own org
+Own org
+Any org
+Event Sessions (Close/Delete)
+Creator only
+Own org
+Any org
+Lead Qualifier (Set/Edit)
+Own captures
+Own org
+Any org
+Lead Qualifier (Bulk Update)
+No
+Own org
+Any org
+Session Export (CSV)
+No
+Own org
+Any org
+Users (Invite/Deactivate)
+No
+Own org
+Any org
+Role Change
+No
+No
+Any org
+Organizations (CRUD)
+No
+No
+Yes
+Audit Logs
+No
+Own org
+Any org
+Platform Analytics
+No
+No
+Yes
+7.3 Tenant Isolation
+Supabase RLS on every table: SELECT/INSERT/UPDATE/DELETE WHERE organization_id = auth.jwt()->>'organization_id'
+TenantContextMiddleware extracts org claim and sets request-scoped tenant context before any service call
+Cross-tenant API requests rejected at TenantGuard with 403 before query execution
+Storage bucket paths org-namespaced; bucket-level policies block cross-tenant object access
+Session data (event_sessions, session_members, contact_encounters) fully org-isolated via RLS
+7.4 Encryption & Transport
+Data at rest: AES-256 via Supabase managed encryption (PostgreSQL + Storage)
+Transport: TLS 1.3 enforced; TLS 1.2 minimum fallback; HSTS 1-year max-age
+Certificate pinning in React Native for API domain
+Signed URLs for image access: 1-hour TTL, HTTPS only
+Lead notes and encounter notes subject to same AES-256 encryption at rest as all PII
+7.5 Audit Logging
+All auth events, contact mutations, session creates/closes, exports, and role changes written to audit_events
+audit_events is append-only; no UPDATE or DELETE RLS granted to any role
+Export events include: actor identity, timestamp, filter criteria, qualifier filter, record count
+Relationship history decisions logged: match confidence, contact IDs, user choice, timestamp
+8. Scalability & Performance
+8.1 Queue Architecture
+Queue
+Workers
+Concurrency
+Retry Policy
+ocr-processing
+Dedicated pool
+5
+3 retries, exponential backoff
+deduplication
+Dedicated pool
+3
+2 retries, 5s fixed delay
+image-processing
+Dedicated pool
+4
+2 retries, 3s fixed delay
+export-generation
+Dedicated pool
+2
+1 retry, 30s delay
+sync-ingest
+Dedicated pool
+8
+3 retries, exponential backoff
+audit-writes
+Dedicated pool
+2
+5 retries, 2s fixed delay
+relationship-matching
+Dedicated pool
+5
+2 retries, 3s fixed delay
+session-counter-sync
+Dedicated pool
+3
+3 retries, exponential backoff
+8.2 Redis Usage
+Rate limiting state: per-user request counters with sliding window TTL
+Token revocation: jti blocklist with TTL matching token expiry
+Session counter buffer: scan_count increments batched in Redis, flushed to PG every 5 seconds (prevents row-lock contention at 1+ scan/sec exhibitor throughput)
+Queue backing store for BullMQ: job state, delayed jobs, dead-letter
+8.3 Performance Targets
+Metric
+Target
+Implementation
+Contact search p95
+< 300ms
+GIN index on tsvector; PgBouncer connection pool
+OCR end-to-end (capture to saved)
+< 8 seconds
+On-device ML Kit + async queue
+Exhibitor scan-to-saved with qualifier
+< 25 seconds
+Optimized qualifier UX; auto-advance at 3s
+Image retrieval (signed URL + load)
+< 1.5 seconds
+CDN-backed Supabase Storage
+Session view (up to 500 contacts)
+< 1 second
+Composite index on event_session_id
+Relationship history lookup
+< 500ms
+trgm index; org-scoped fuzzy match
+Per-event export (up to 1,000 contacts)
+< 10 seconds
+BullMQ export job; streaming CSV write
+Admin dashboard load
+< 2 seconds
+Read replica for analytics queries
+8.4 Large-Scale Considerations
+10M+ contacts per tenant without query degradation via composite B-Tree and GIN indexes
+contacts table: partition by organization_id hash at 100M+ rows
+contact_encounters table: partition by created_at year at 50M+ rows
+Stateless NestJS API: horizontally scalable behind load balancer; no in-process state
+BullMQ workers scaled independently from API tier based on queue depth metrics
+At 1M+ sessions per tenant: session queries protected by composite index; sessions >2 years archived
+Relationship matching scoped to organization_id; trgm index pre-built on contacts.search_vector
+9. Deployment Architecture
+9.1 Infrastructure Overview
+Component
+Service
+Strategy
+Backend API (NestJS)
+Docker on Fly.io / Railway / AWS ECS
+dev / staging / production; blue-green deploy
+PostgreSQL
+Supabase Managed PostgreSQL
+Separate Supabase project per environment
+Object Storage
+Supabase Storage
+Separate buckets per environment
+Authentication
+Supabase Auth
+Separate project per environment
+Job Queue / Cache
+Upstash Redis (serverless)
+Separate instances per environment
+Admin Dashboard
+Vercel / Cloudflare Pages
+Preview deploy per PR; production on main
+Mobile APK
+Internal MDM (Intune / Workspace ONE)
+Staged rollout: 10% → 50% → 100% over 7 days
+Monitoring
+Sentry + Datadog
+Shared; environment-tagged
+9.2 CI/CD Pipeline
+Push to feature branch → GitHub Actions: lint → unit tests → integration tests (Docker Compose + test PG)
+Coverage gate: fail if < 80% unit + integration coverage
+Security scan: npm audit (CRITICAL = build failure) + Semgrep SAST
+Merge to main → auto-deploy to staging → E2E tests (Detox for mobile; Playwright for dashboard)
+Manual approval gate before production promotion
+Blue/green deploy to production; automated rollback if health checks fail within 5 minutes
+Feature flags: context selection home screen toggleable per org via organizations.settings JSONB — enables phased tenant-by-tenant rollout
+9.3 Database Migrations
+All migrations are additive in v3.0 (ALTER TABLE for contacts; new tables for event_sessions, session_members, contact_encounters)
+Migration tool: Supabase CLI migrations with version-controlled SQL files
+Run order: 001_create_event_sessions → 002_create_session_members → 003_create_contact_encounters → 004_alter_contacts_v30 → 005_create_indexes_v30 → 006_update_ocr_jobs_v30 → 007_create_rls_policies_v30
+Zero-downtime: column additions use IF NOT EXISTS; no DROP or RENAME on v1.0 columns
+10. Monitoring & Logging
+10.1 Observability Stack
+Concern
+Tool
+Key Signals
+Application errors
+Sentry
+Error rate, unhandled exceptions, release regression
+APM / tracing
+Datadog APM
+Request latency, service dependency map, p95/p99
+Infrastructure
+Datadog Infrastructure
+CPU, memory, disk, network for all containers
+Database
+Supabase Dashboard + pg_stat_*
+Slow queries, connection pool utilization
+Queue monitoring
+BullMQ Dashboard (Bull Board)
+Queue depth, throughput, failure rate, dead-letter
+Mobile errors
+Sentry React Native
+Crash rate, ANR, OCR failure stack traces
+Uptime
+Datadog Synthetics / BetterUptime
+Endpoint availability, SSL expiry, API response time
+Log aggregation
+Datadog Logs
+Structured JSON logs, correlation ID tracing
+10.2 Alerting Thresholds
+Alert
+Threshold
+Severity
+API Error Rate
+> 1% of requests in 5-min window
+CRITICAL — page on-call
+API p95 Latency
+> 1 second sustained 5 min
+HIGH — alert engineering channel
+OCR Failure Rate
+> 10% of jobs in 1 hour
+HIGH — alert engineering channel
+Queue Depth (OCR)
+> 500 pending jobs
+MEDIUM — alert engineering channel
+Session Counter Drift
+Local count differs from server by >10 post-sync
+MEDIUM — alert + investigate sync job
+Relationship Match False Positives
+> 15% of 'add encounter' decisions subsequently undone
+MEDIUM — alert product team; review threshold
+Storage Quota (Org)
+> 90% of org quota
+MEDIUM — email org admin
+DB Connection Pool
+> 80% utilization
+HIGH — alert engineering channel
+Failed Login Attempts
+> 20 per IP per 5 min
+HIGH — security alert + auto-block
+10.3 Sync & Queue Monitoring
+Offline sync lag: alert if average sync delay > 15 minutes for connected devices
+Dead-letter queue: alert immediately when any item lands in dead-letter; page on-call if OCR or sync-ingest DLQ
+Session counter reconciliation: background job logs drift events; aggregate report to engineering channel daily
+11. MVP Technical Scope
+11.1 In Scope
+Android APK (API 29+) via internal MDM with context selection home screen
+Email/password auth with JWT RS256 session management
+Google ML Kit OCR: field extraction, confidence scoring (field < 0.70 flagged; mean < 0.60 retried), manual correction
+Visitor mode: session create/browse/join, template selection, scan-under-session, session view
+Exhibitor mode: booth session, team assignment, high-volume scan, Lead Qualifier (HOT/WARM/COLD), 160-char note, 3s auto-advance speed mode
+Quick Capture mode: 7 encounter types, 200-char note, follow-up date with local notification
+DB migration: event_sessions, session_members, contact_encounters tables; additive ALTER on contacts and ocr_jobs
+Relationship history: cross-event fuzzy match, push to client, 3-option decision card, contact_encounters append
+Contact CRUD + org-wide visibility; encounter history timeline on contact detail
+Duplicate detection: normalized email + phone + Levenshtein fuzzy (name+company, threshold 0.85)
+Image pipeline: session-aware storage paths, thumbnail generation (400x300, quality 70), signed URL retrieval (1hr TTL)
+Offline queue: all 3 modes; SQLite persistence; idempotency-keyed sync; session counter reconciliation
+3-tier RBAC (employee / manager / super_admin) with NestJS guards
+Multi-tenant PostgreSQL with RLS on all tables including event_sessions
+Full-text search (GIN) + filter by mode/session/qualifier/encounter_type
+CSV export: org-level + per-session with qualifier filter (Manager role)
+Admin dashboard: org/user management, OCR monitoring, audit log browser, Event Sessions panel, Lead Funnel panel, Encounter Type analytics
+Sentry error tracking, Datadog monitoring, structured JSON logging, correlation IDs
+Feature flag: context selection home screen toggleable per org via settings JSONB
+11.2 Out of Scope (Post-MVP)
+Feature
+Phase
+iOS application
+Phase 2
+SSO / SAML 2.0 / OIDC
+Phase 2
+CRM integrations (Salesforce, HubSpot, Pipedrive)
+Phase 2
+Networking Event mode (4th capture mode)
+Phase 2
+Multi-language OCR (CJK, Arabic, Devanagari)
+Phase 2
+Event QR code session join
+Phase 2
+Webhook outbound events
+Phase 2
+Bulk CSV contact import
+Phase 2
+LinkedIn profile enrichment
+Phase 2/3
+AI lead scoring (LLM-based)
+Phase 3
+Follow-up email automation
+Phase 3
+Relationship graph visualization
+Phase 3
+NFC business card capture
+Phase 3
+Analytics data warehouse (BigQuery/ClickHouse)
+Phase 3
+SOC 2 Type II certification
+Phase 4
+White-label mobile SDK
+Phase 4
+Multi-region deployment
+Phase 4
+12. Engineering Risks & Mitigations
+Risk
+Probability
+Impact
+Mitigation
+OCR accuracy < 92% on poor-quality cards
+Medium
+High
+Pre-capture blur gate (Laplacian variance); per-field confidence threshold (0.70); up to 3 auto-retries; manual correction flow; batch reprocessing from stored originals
+Exhibitor qualifier step slows high-volume scan
+Medium
+High
+3s auto-advance; qualifier-only speed mode toggle; large tap targets for single-thumb eyes-diverted operation
+Session counter drift between offline and server
+Medium
+Low
+Idempotency keys prevent duplicates; session-counter-sync BullMQ job on every sync; alert if drift > 10 post-sync
+Relationship matching false positives
+Low
+Medium
+Confidence threshold tunable (currently 0.85); admin panel shows decision logs for threshold review; user can dismiss without consequence
+Redis unavailability (rate limits / counter buffer)
+Low
+Medium
+Upstash SLA; degrade gracefully: rate limiting falls back to API-level throttle; counter flushes on next available connection
+Supabase degradation / outage
+Low
+High
+RTO < 4hr; Supabase SLA 99.95%; read replica for analytics; offline-first mobile design maintains capture continuity
+Offline SQLite data loss on device wipe/crash
+Low
+Medium
+SQLite survives app restart; idempotency keys handle re-submission; sync queue UI shows pending items for user awareness
+Lead qualifier export unauthorised access
+Low
+Critical
+Manager role required; every export audit-logged with actor, filter criteria, record count; signed URLs expire 1hr
+JWT token compromise
+Very Low
+Critical
+RS256 asymmetric signing; 1hr access token TTL; refresh token rotation; jti blocklist; certificate pinning in app
+CardVault TRD v3.0  |  CONFIDENTIAL  |  For Internal Engineering Use Only

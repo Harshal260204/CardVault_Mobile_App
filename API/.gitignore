@@ -1,0 +1,9 @@
+uploads/
+exports/
+dist/
+.env
+
+# GCP / API keys and other secrets (never commit)
+src/secure/
+node_modules/
+*.json

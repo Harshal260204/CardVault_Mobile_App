@@ -1,0 +1,1136 @@
+CardVault v3.0
+Enterprise Implementation Plan
+Production-Grade Engineering Execution Blueprint
+Classification: CONFIDENTIAL  |  Version 1.0  |  May 2026
+Prepared for: Principal Engineers · Tech Leads · Architects · DevOps · QA · Product Leadership
+1. Executive Engineering Summary
+1.1 System Goals
+CardVault v3.0 is a production-grade, multi-tenant enterprise SaaS platform for business card intelligence. The system digitizes, centralizes, and operationalizes business card data at enterprise scale across three context-aware capture modes: Visitor, Exhibitor, and Quick Capture. The platform must operate reliably in degraded-network environments (trade show floors, airports, conference venues) while providing real-time analytics and relationship intelligence to enterprise managers.
+The core engineering objectives are:
+Zero contact data loss: offline captures must survive indefinitely with guaranteed sync-on-reconnect
+Multi-tenant isolation: PostgreSQL RLS enforces organizational boundaries at the data layer—no exceptions
+Async pipeline reliability: OCR, deduplication, and relationship matching must handle failure gracefully without blocking user workflows
+Sub-second capture experience: camera-to-saved < 8 seconds including on-device OCR
+Audit completeness: every mutation, export, and auth event immutably recorded
+1.2 Scalability Goals
+Metric
+Year 1 Target
+Year 3 Target
+Design Ceiling
+Organizations (tenants)
+500
+5,000
+50,000 (sharding trigger)
+Total contacts
+5M
+100M
+1B (partitioning required)
+OCR jobs / day
+50,000
+500,000
+5M (worker autoscale)
+Concurrent API requests
+500 RPS
+5,000 RPS
+50,000 RPS (horizontal)
+Event sessions active
+1,000
+10,000
+100,000
+Storage (card images)
+500 GB
+10 TB
+100 TB (CDN offload)
+Queue throughput
+1,000 jobs/min
+10,000 jobs/min
+100,000 jobs/min
+1.3 Reliability Goals
+Objective
+Target
+Mechanism
+API Availability
+99.9% (8.76hr/yr downtime)
+Multi-AZ deployment, health checks, circuit breakers
+OCR Pipeline SLA
+95% of jobs < 10s
+Worker autoscaling, retry policies, manual fallback
+Sync Reliability
+Zero data loss on reconnect
+SQLite FIFO queue, idempotency keys, dead-letter handling
+RTO (Recovery Time)
+< 30 minutes
+Automated failover, runbooks, warm standby
+RPO (Recovery Point)
+< 5 minutes
+Continuous WAL archival, Supabase managed backups
+p95 API Latency
+< 300ms
+PgBouncer, Redis caching, query optimization
+1.4 Team Structure Assumptions
+This plan assumes a cross-functional engineering organization of approximately 15–20 engineers across 4 squads:
+Platform Squad (4 engineers): NestJS backend, PostgreSQL schema, BullMQ workers
+Mobile Squad (4 engineers): React Native, offline sync, OCR integration, camera pipeline
+Intelligence Squad (3 engineers): Relationship engine, deduplication, analytics
+Infrastructure Squad (2 engineers): CI/CD, Kubernetes, monitoring, security hardening
+QA/Reliability (2 engineers): E2E testing, load testing, security testing, RLS validation
+Tech Lead / Architect (1): Cross-squad architecture decisions, ADR ownership
+1.5 Expected Production Scale
+Initial launch targets 50–200 enterprise organizations with 10–500 users each. Peak load scenarios include major trade shows where 100+ concurrent exhibitor sessions each scanning 10+ cards/minute simultaneously represent the critical load design point. At 100 sessions × 10 scans/min × peak factor 3x = 3,000 OCR submissions/minute, requiring pre-warmed worker pools and Redis scan counter buffering.
+2. System Architecture
+2.1 High-Level Architecture
+CardVault v3.0 follows a four-tier architecture with clear service boundaries and explicit async communication contracts:
+Tier
+Technology
+Responsibility
+Scaling Model
+Client — Mobile
+React Native 0.74+ / Android 10+
+Card capture, on-device OCR (ML Kit V2), SQLite offline queue, camera pipeline
+Horizontal (device fleet)
+Client — Dashboard
+React 18 + TypeScript + Tailwind
+Analytics, session management, user admin, exports, real-time updates
+CDN-distributed static assets
+API
+NestJS / Node.js 20 LTS
+Business logic, RBAC/RLS, auth middleware, REST endpoints, rate limiting
+Horizontal pod autoscaling
+Workers
+BullMQ + Redis (Upstash)
+OCR, dedup, image processing, relationship matching, export generation, audit writes
+Independent queue-depth autoscaling
+Data
+PostgreSQL 15 (Supabase) + Supabase Storage
+Multi-tenant RLS-enforced relational data, S3-compatible card image storage
+Vertical + read replicas
+Cache/Queue
+Redis via Upstash Serverless
+BullMQ backing, rate limiting, JWT blocklist, scan count buffer
+Serverless (Upstash auto-scales)
+2.2 Service Boundaries
+Services are organized into bounded contexts that map directly to NestJS modules:
+Auth Service: JWT issuance, refresh token rotation, jti blocklist, rate-limit-enforced login
+Sessions Service: Event session CRUD, team membership, scan counter aggregation, session lifecycle
+Contacts Service: Contact CRUD, full-text search, deduplication resolution, merge operations
+OCR Service: Job orchestration, confidence scoring, manual fallback routing, reprocessing
+Images Service: Signed URL generation, upload confirmation, thumbnail job dispatch
+Encounters Service: Append-only encounter log, qualifier updates, timeline queries
+Relationship Service: Match result storage, cross-event history resolution, match threshold tuning
+Export Service: CSV generation job dispatch, signed download URL delivery, rate enforcement
+Analytics Service: Aggregation queries routed to read replica, metric computation
+Admin Service: Tenant provisioning, platform analytics, OCR reprocessing (super_admin only)
+Sync Service: Offline reconnect handling, idempotency enforcement, dead-letter management
+Audit Service: Append-only event logging via queue-backed writes, compliance queries
+2.3 Request Lifecycle
+Every authenticated API request traverses the following middleware chain in order:
+TLS termination at load balancer / Cloudflare
+Rate limiter middleware: Redis sliding window check per user/endpoint
+JwtAuthGuard: RS256 token verification, jti blocklist check in Redis
+TenantContextMiddleware: Extract organization_id from JWT claims, attach to request context
+TenantGuard: Validate URL-scoped org parameters match JWT org claim (403 on mismatch)
+RolesGuard: Verify role claim satisfies endpoint RBAC requirement
+DTO validation: class-validator pipe, field-level constraint enforcement
+Service layer: business logic execution, repository calls
+PostgreSQL RLS: Final data-layer enforcement (WHERE organization_id = auth.jwt()->>'org')
+Response interceptor: Envelope wrapping { data, meta, error }, correlation-id injection
+Exception filter: Normalize errors to standard format, Sentry capture on 5xx
+2.4 OCR Lifecycle
+The OCR pipeline is the critical path for the core product value proposition. It spans on-device processing through async server-side enrichment:
+Quality gate (on-device): Camera screen validates resolution ≥ 800×600, blur score (Laplacian variance), tilt angle. Failed gate prompts retake.
+Auto-shutter (on-device): When on-device ML Kit confidence > 90% for 800ms, camera auto-captures with haptic + flash feedback.
+ML Kit processing (on-device): Google ML Kit Text Recognition V2 extracts text fields with per-field confidence scores (0.0–1.0).
+Signed URL request: POST /images/upload-url returns 15-minute signed S3 PUT URL; card_images row created with status=pending.
+Direct S3 upload: Client uploads original JPEG to Supabase Storage (path: org/{org_id}/sessions/{sess_id}/{contact_id}/original.jpg).
+Image confirm: POST /images/:id/confirm updates status=confirmed, enqueues image-processing BullMQ job for thumbnail generation (400×300 JPEG q70).
+OCR submit: POST /ocr/submit with full payload (mode context, session_id, qualifier, encounter_type, OCR fields, confidence scores, client_idempotency_key). Idempotency key checked in Redis cache (TTL 24h) before DB lookup.
+Contact creation: contacts and contact_encounters rows written synchronously within OCR submit handler.
+Async enrichment: deduplication job enqueued → relationship-matching job enqueued post-dedup (if no exact match found).
+Response: 201 (new contact) or 200 (idempotency replay) returned immediately; relationship match result pushed via push notification when available.
+2.5 Sync Lifecycle (Offline-First)
+The offline sync system guarantees zero data loss for captures taken without connectivity:
+Offline detection: React Native NetInfo detects connectivity loss; syncStore state machine transitions ONLINE → OFFLINE.
+Local capture: Full payload (image URI, OCR fields, mode context, qualifier, client_idempotency_key) written to SQLite pending_captures table. UI shows 'Saved locally' with amber sync badge.
+Reconnect detection: NetInfo fires CONNECTING → SYNCING; background sync service activates.
+Image upload: Each pending capture uploads image first (retry-able; same signed URL flow). Image must confirm before OCR submit.
+FIFO drain: pending_captures drained in created_at order. Each POST /ocr/submit includes client_idempotency_key.
+Server response handling: 201 = new; 200 = already processed (mark complete, no duplicate); 409 = conflict (server-wins, local version archived to sync_queue with status=conflict).
+Dead-letter: After 3 retries, sync_queue.status = dead_letter. Surfaced in Sync Status screen as 'failed · Retry'.
+Counter reconciliation: session-counter-sync BullMQ job runs post-sync, computes server_count + unsynced_count = reconciled total.
+Completion: UI transitions to ONLINE, relationship checks run for all synced offline captures.
+3. Monorepo / Repository Strategy
+3.1 Turborepo Recommendation
+Turborepo is recommended over Nx for CardVault v3.0. Rationale: Turborepo has lighter configuration overhead for a mixed JS/TS monorepo, better out-of-the-box remote caching integration with Vercel (where the dashboard deploys), and simpler workspace dependency graphs for a team of this size. Nx's generator ecosystem and project graph features offer marginal benefit given the bounded scope of this codebase.
+3.2 Folder Structure
+cardvault/
+├── apps/
+│   ├── api/                    # NestJS backend
+│   ├── mobile/                 # React Native (Android APK)
+│   └── dashboard/              # React 18 + TypeScript admin UI
+├── packages/
+│   ├── shared-types/           # TypeScript interfaces, enums, DTOs
+│   ├── shared-validation/      # class-validator schemas, Zod schemas
+│   ├── shared-constants/       # Queue names, rate limits, confidence thresholds
+│   ├── ocr-utils/              # Confidence scoring, field normalization utilities
+│   ├── sync-protocol/          # Client/server sync payload contracts
+│   └── ui-components/          # Shared React components (dashboard only)
+├── infra/
+│   ├── k8s/                    # Kubernetes manifests (Helm charts)
+│   ├── docker/                 # Dockerfiles per app
+│   └── terraform/              # IaC for cloud resources
+├── scripts/
+│   ├── migrations/             # Supabase migration files (numbered)
+│   └── seed/                   # Dev/staging seed data
+├── .github/
+│   └── workflows/              # CI/CD pipeline definitions
+├── turbo.json                  # Pipeline configuration
+└── package.json                # Root workspace definition
+3.3 Shared Package Contracts
+The shared-types package is the single source of truth for cross-service contracts. Any change to a DTO or interface that breaks the API contract requires a version bump and coordinated deployment. Key types exported:
+CaptureMode enum: visitor | exhibitor | quick_capture | legacy
+LeadQualifier enum: hot | warm | cold
+OCR field confidence interfaces: OcrFieldResult, OcrSubmitPayload
+Sync protocol types: PendingCapture, SyncQueueItem, SyncStatus
+BullMQ job payload interfaces (one per queue): OcrJobPayload, DeduplicationJobPayload, etc.
+API response envelope: ApiResponse<T> { data: T; meta: ResponseMeta; error?: ApiError }
+3.4 Environment Management
+Environment
+Database
+Redis
+Storage
+Deploy Target
+Development
+Local Supabase (Docker)
+Local Redis
+Local Supabase Storage
+localhost
+Staging
+Supabase staging project
+Upstash staging instance
+Staging S3 bucket
+K8s staging namespace
+Production
+Supabase prod project + read replica
+Upstash prod instance
+Prod S3 bucket
+K8s production namespace
+Environment secrets managed via Kubernetes Secrets + external-secrets-operator syncing from AWS Secrets Manager. Never committed to repository. .env files prohibited in CI after foundation phase.
+4. Backend Architecture (NestJS)
+4.1 Module Breakdown
+Module
+Controllers
+Services
+Repositories
+Guards/Interceptors
+AuthModule
+AuthController
+AuthService, TokenService
+UserRepository
+JwtAuthGuard, RateLimitGuard
+SessionsModule
+SessionsController
+SessionsService, CounterService
+SessionRepository, MemberRepository
+RolesGuard, TenantGuard
+ContactsModule
+ContactsController
+ContactsService, SearchService, MergeService
+ContactRepository, EncounterRepository
+RolesGuard, TenantGuard
+OcrModule
+OcrController
+OcrService, ConfidenceService
+OcrJobRepository
+RolesGuard
+ImagesModule
+ImagesController
+ImagesService, StorageService
+CardImageRepository
+RolesGuard
+RelationshipModule
+RelationshipController
+MatchingService, DeduplicationService
+MatchRepository
+RolesGuard
+ExportModule
+ExportController
+ExportService
+ExportRepository
+RolesGuard (manager+)
+AnalyticsModule
+AnalyticsController
+AnalyticsService, AggregationService
+AnalyticsRepository
+RolesGuard (manager+)
+AdminModule
+AdminController
+TenantService, PlatformService
+OrganizationRepository
+RolesGuard (super_admin)
+AuditModule
+—
+AuditService
+AuditRepository
+—
+SyncModule
+SyncController
+SyncService, IdempotencyService
+SyncQueueRepository
+JwtAuthGuard
+QueueModule
+—
+QueueService, WorkerRegistry
+—
+—
+4.2 NestJS File Structure (api/)
+apps/api/src/
+├── main.ts                          # Bootstrap, global pipes, Sentry init
+├── app.module.ts                    # Root module, global middleware
+├── common/
+│   ├── decorators/                  # @CurrentUser(), @OrgId(), @Roles()
+│   ├── filters/                     # GlobalExceptionFilter
+│   ├── guards/                      # JwtAuthGuard, RolesGuard, TenantGuard
+│   ├── interceptors/                # ResponseWrapperInterceptor, LoggingInterceptor
+│   ├── middleware/                  # TenantContextMiddleware, RateLimitMiddleware
+│   ├── pipes/                       # ValidationPipe (global)
+│   └── types/                       # RequestContext, TenantContext
+├── modules/
+│   ├── auth/
+│   │   ├── auth.controller.ts
+│   │   ├── auth.service.ts
+│   │   ├── token.service.ts
+│   │   ├── strategies/              # JwtStrategy (RS256)
+│   │   └── dto/                     # LoginDto, RefreshDto
+│   ├── sessions/
+│   │   ├── sessions.controller.ts
+│   │   ├── sessions.service.ts
+│   │   ├── counter.service.ts       # Redis INCR + batch flush
+│   │   ├── sessions.repository.ts
+│   │   └── dto/
+│   ├── contacts/
+│   │   ├── contacts.controller.ts
+│   │   ├── contacts.service.ts
+│   │   ├── search.service.ts
+│   │   ├── merge.service.ts
+│   │   ├── contacts.repository.ts
+│   │   ├── encounters.repository.ts
+│   │   └── dto/
+│   ├── ocr/
+│   │   ├── ocr.controller.ts
+│   │   ├── ocr.service.ts
+│   │   ├── confidence.service.ts
+│   │   └── dto/
+│   ├── workers/
+│   │   ├── ocr.worker.ts
+│   │   ├── deduplication.worker.ts
+│   │   ├── relationship.worker.ts
+│   │   ├── image-processing.worker.ts
+│   │   ├── export-generation.worker.ts
+│   │   ├── sync-ingest.worker.ts
+│   │   ├── session-counter-sync.worker.ts
+│   │   └── audit-writes.worker.ts
+│   └── [remaining modules...]
+└── config/
+├── database.config.ts
+├── redis.config.ts
+└── queue.config.ts
+4.3 Key Middleware and Guards
+TenantContextMiddleware must run before any guard or service. It extracts organization_id from the decoded JWT payload and attaches it to the request context object. This is the single point of org claim extraction—all subsequent service calls read from request.tenantContext.organizationId, never re-parsing the JWT.
+TenantGuard validates that any :orgId, :sessionId, or :contactId URL parameter belongs to the calling user's organization. It does this by looking up the entity in the repository with an organization_id filter before passing control to the service layer. This prevents IDOR (Insecure Direct Object Reference) attacks where an attacker substitutes IDs from other organizations.
+RolesGuard reads the @Roles() decorator metadata from the route handler and compares against the JWT role claim. Role hierarchy: super_admin > manager > employee. Insufficient role returns 403 with an audit log entry.
+5. PostgreSQL + Supabase Design
+5.1 Why PostgreSQL + Supabase
+PostgreSQL 15 is the correct choice for CardVault because: (1) RLS is a first-class PostgreSQL feature, enabling database-level multi-tenant isolation without application-layer filtering that could be bypassed; (2) GIN indexes support both tsvector full-text search and array-contains queries (emails[], phones[]) in a single engine; (3) pg_trgm extension enables fuzzy string matching (Levenshtein/trigram) required by the relationship intelligence engine; (4) Generated columns (search_vector TSVECTOR GENERATED ALWAYS AS STORED) eliminate application-side index maintenance.
+Supabase is appropriate because it provides: managed PostgreSQL 15 with PgBouncer in transaction mode, Supabase Auth with RS256 JWT including org/role claims, S3-compatible object storage with AES-256 at rest, and a production-ready read replica. The managed service reduces operational burden for a startup-phase product while maintaining full PostgreSQL compatibility.
+5.2 RLS Policy Design
+Every table has RLS enabled with at minimum a SELECT policy. The standard pattern:
+-- Enable RLS on every table
+ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+-- SELECT: users see only their org
+CREATE POLICY contacts_select ON contacts
+FOR SELECT USING (organization_id = (auth.jwt()->>'organization_id')::UUID);
+-- INSERT: users can insert into their org
+CREATE POLICY contacts_insert ON contacts
+FOR INSERT WITH CHECK (organization_id = (auth.jwt()->>'organization_id')::UUID);
+-- UPDATE: employees can only update own captures; managers can update org-wide
+CREATE POLICY contacts_update ON contacts
+FOR UPDATE USING (
+organization_id = (auth.jwt()->>'organization_id')::UUID
+AND (created_by = (auth.jwt()->>'sub')::UUID
+OR (auth.jwt()->>'role') IN ('manager','super_admin'))
+);
+-- audit_events: append-only, no UPDATE/DELETE policy
+CREATE POLICY audit_insert ON audit_events
+FOR INSERT WITH CHECK (true);  -- service role only writes
+5.3 Indexing Strategy
+Table
+Index
+Type
+Purpose
+contacts
+organization_id, deleted_at
+BTREE composite
+Primary org-scoped list query
+contacts
+search_vector
+GIN
+Full-text search across name/company/email/tags
+contacts
+emails
+GIN (array)
+O(1) email exact match for deduplication
+contacts
+phones
+GIN (array)
+O(1) phone exact match for deduplication
+contacts
+(full_name || ' ' || company)
+GIN (pg_trgm)
+Fuzzy name+company matching
+contact_encounters
+contact_id, created_at DESC
+BTREE composite
+Timeline queries for relationship history
+contact_encounters
+organization_id, session_id
+BTREE composite
+Session contact list
+contact_encounters
+client_idempotency_key
+BTREE UNIQUE
+Sync dedup enforcement
+event_sessions
+organization_id, status
+BTREE composite
+Active session listing
+ocr_jobs
+organization_id, status, created_at
+BTREE composite
+OCR monitoring queue
+audit_events
+organization_id, created_at DESC
+BTREE composite (partitioned)
+Audit log pagination
+5.4 Migration Strategy
+Migrations use Supabase CLI numbered migration files (supabase/migrations/YYYYMMDDHHMMSS_description.sql). Rules:
+Migrations are always additive in production. No DROP COLUMN, DROP TABLE, or destructive ALTER in a migration without a preceding deprecation phase.
+New nullable columns are safe to add without downtime. New NOT NULL columns require a default or backfill migration.
+RLS policy changes run in a transaction. Policy drop + recreate must be atomic.
+New indexes: CREATE INDEX CONCURRENTLY to avoid table locks on active production tables.
+The schema change checklist (from schema doc section 15) is enforced as a PR template gate.
+5.5 PgBouncer Strategy
+Supabase provides PgBouncer in transaction pooling mode. This is critical for BullMQ workers and the NestJS API tier which otherwise would each hold a persistent connection per pod instance. Transaction mode releases the connection to the pool after each transaction commit, enabling far higher concurrency than the 100-connection default PostgreSQL limit would allow.
+Implication: DO NOT use PostgreSQL advisory locks, LISTEN/NOTIFY, or session-scoped prepared statements with PgBouncer in transaction mode. Each transaction may be routed to a different server connection. Use application-level distributed locking via Redis SETNX for cross-request coordination.
+6. Redis + BullMQ Architecture
+6.1 Redis Responsibilities (Ephemeral Only)
+Redis is treated as ephemeral cache and coordination infrastructure. No durable business data is stored solely in Redis. If the Redis instance is wiped, the system must recover without data loss. This constraint drives the following design decisions:
+Scan count buffer (Redis INCR): If Redis is lost, the session-counter-sync job detects drift > 10 and triggers a full recount from PostgreSQL contact_encounters. Maximum data inconsistency: 5 seconds of scan count.
+JWT jti blocklist: If Redis is lost, revoked tokens become temporarily valid until they expire naturally. Acceptable because token TTL is 1 hour. Recovery: re-add active revocations from audit_events on Redis restart.
+Rate limiting counters: Reset on Redis loss. Acceptable—attackers cannot exploit a brief window to exceed limits at meaningful scale before Redis recovers.
+BullMQ job state: BullMQ persists job data in Redis including job payloads, results, and retry state. While jobs in-flight during a Redis failure may be lost, the upstream systems (OCR submit, sync reconnect) are idempotent and will re-enqueue on the next request. Completed jobs are retained per COMPLETED_JOB_RETENTION policy (1000 jobs, 24hr TTL).
+6.2 Queue Design
+Queue Name
+Trigger
+Workers
+Concurrency
+Retry
+Backoff
+DLQ Action
+ocr-processing
+POST /ocr/submit
+5 pods
+5/pod
+3x
+Exponential 2^n×1s
+ocr_jobs.status = failed; manager notification
+deduplication
+Post-OCR contact create
+3 pods
+3/pod
+2x
+Fixed 5s
+contact marked needs_review; no block
+relationship-matching
+Post-dedup no-exact-match
+5 pods
+5/pod
+2x
+Fixed 3s
+Skip match, log to Sentry
+image-processing
+POST /images/:id/confirm
+4 pods
+4/pod
+2x
+Fixed 3s
+card_image.status = failed
+export-generation
+POST /*/export
+2 pods
+2/pod
+1x
+Fixed 30s
+exports.status = failed; user notification
+sync-ingest
+Offline reconnect
+8 pods
+8/pod
+3x
+Exponential 2^n×2s
+sync_queue.status = dead_letter
+session-counter-sync
+Post-sync cycle (5s)
+3 pods
+3/pod
+3x
+Exponential
+Alert engineering; full recount
+audit-writes
+All mutations
+2 pods
+2/pod
+5x
+Fixed 2s
+Sentry alert + direct DB fallback
+6.3 Job Payload Contracts (Key Examples)
+OCR Processing Job Payload
+interface OcrJobPayload {
+ocr_job_id: string;          // UUID — references ocr_jobs table
+card_image_id: string;       // UUID — references card_images table
+organization_id: string;     // For RLS validation within worker
+extracted_fields: {
+full_name?: string;
+company?: string;
+title?: string;
+emails: string[];
+phones: string[];
+website?: string;
+address?: string;
+};
+confidence_scores: Record<string, number>;  // per-field 0.0–1.0
+capture_mode: 'visitor' | 'exhibitor' | 'quick_capture';
+session_id?: string;         // null for quick_capture
+encounter_type?: string;     // quick_capture encounter type
+lead_qualifier?: 'hot' | 'warm' | 'cold';
+client_idempotency_key: string;  // UUID v4 from mobile
+correlation_id: string;      // request trace ID
+}
+Deduplication Job Payload
+interface DeduplicationJobPayload {
+contact_id: string;
+organization_id: string;
+emails: string[];            // normalized to lowercase
+phones: string[];            // normalized E.164
+full_name: string;
+company: string;
+correlation_id: string;
+}
+6.4 Idempotency Protection
+Every BullMQ job carries a correlation_id and where applicable a client_idempotency_key. Worker implementation must be idempotent: re-processing the same job must produce the same outcome without side effects. Implementation pattern:
+// Worker idempotency check (sync-ingest worker example)
+async processJob(job: Job<SyncIngestPayload>) {
+const key = job.data.client_idempotency_key;
+// 1. Check Redis cache (O(1), TTL 24h)
+const cached = await this.redis.get(`idem:${key}`);
+if (cached) return JSON.parse(cached);  // Already processed
+// 2. Check DB (authoritative, handles Redis flush scenario)
+const existing = await this.syncRepo.findByKey(key);
+if (existing) {
+await this.redis.setex(`idem:${key}`, 86400, JSON.stringify(existing));
+return existing;
+}
+// 3. Process and persist atomically
+const result = await this.processCapture(job.data);
+await this.redis.setex(`idem:${key}`, 86400, JSON.stringify(result));
+return result;
+}
+6.5 Upstash Limitations and Mitigations
+Limitation
+Impact
+Mitigation
+Connection latency (serverless cold start)
+First request in idle period: 50–200ms added latency
+Keep-alive ping job; pre-warm on deploy
+Max command size (1MB default)
+Large export job payloads may exceed limit
+Store large payloads in PostgreSQL; pass only job_id in queue
+No Lua scripting in Upstash free tier
+MULTI/EXEC pattern required for atomicity
+Use GETDEL + UPDATE pattern in worker (already designed for this)
+Memory limit (plan-dependent)
+Queue depth spikes during event load may exhaust memory
+Set BullMQ job TTL; configure maxStalledCount; monitor via BullMQ Dashboard
+No persistence guarantee (serverless)
+Redis state loss on maintenance
+System designed ephemeral-first; recovery paths for all Redis state
+7. API Design Strategy
+7.1 REST Conventions and Versioning
+All endpoints are versioned under /api/v1/. Version is incremented only on breaking changes. Non-breaking additions (new optional fields, new endpoints) do not require version bump. URI versioning (not header versioning) for cache-friendliness and mobile client compatibility.
+Convention
+Standard
+Base path
+/api/v1/
+Resource naming
+Plural nouns: /contacts, /sessions, /ocr/jobs
+List operations
+GET /contacts?page=1&limit=20&q=smith&mode=visitor
+Singleton ops
+GET /contacts/:id — UUID v4 always
+Actions (non-CRUD)
+POST /sessions/:id/close, POST /ocr/reprocess/:id
+Response envelope
+{ data: T, meta: { page, limit, total, correlation_id }, error?: ApiError }
+Error format
+{ code: string, message: string, field?: string, correlation_id: string }
+Idempotency header
+Idempotency-Key: <UUID> on all POST mutation endpoints
+Correlation ID
+X-Correlation-ID injected on every request; returned in response headers
+Pagination
+Cursor-based for high-volume lists (contacts, encounters); offset for analytics
+7.2 JWT Strategy
+Authentication uses RS256 asymmetric JWT issued by Supabase Auth. The access token (1-hour TTL) carries claims: sub (user UUID), org (organization UUID), role (employee | manager | super_admin), jti (unique token ID for blocklist).
+Refresh token rotation: 30-day TTL, single-use, rotated on every /auth/refresh call. Previous refresh token invalidated immediately via jti blocklist in Redis. Refresh token stored encrypted in mobile secure storage (Android Keystore). On refresh, both new access token and new refresh token returned. Old access token added to jti blocklist with TTL equal to remaining access token lifetime.
+Offline behavior: JWT persisted locally in mobile secure storage. App functions offline without re-auth until token expires. On expiry while offline, JWT remains locally persisted for read access to SQLite data; re-auth required before next API call on reconnect.
+7.3 Standard Error Codes
+HTTP Code
+Error Code
+Scenario
+Client Action
+400
+VALIDATION_ERROR
+DTO validation failure
+Display field-level error messages
+401
+UNAUTHORIZED
+Invalid/expired JWT
+Auto-refresh; redirect to login if refresh fails
+403
+FORBIDDEN
+Role/tenant violation
+Show permission error; do not retry
+404
+NOT_FOUND
+Resource doesn't exist in org scope
+Handle gracefully
+409
+CONFLICT
+Idempotency collision (sync)
+Treat as success; mark item synced
+429
+RATE_LIMITED
+Rate limit exceeded
+Backoff per Retry-After header
+500
+INTERNAL_ERROR
+Unhandled server error
+Exponential backoff retry; surface to Sentry
+8. React Native Architecture
+8.1 Navigation Architecture
+Navigation uses React Navigation 6 with a bottom tab navigator (5 tabs: Home | Capture FAB | Sessions | Contacts | More) at root level, with nested stack navigators per tab. Deep linking registered for relationship match push notifications (navigate to /contacts/:id) and follow-up date reminders (/capture/quick with pre-filled encounter_type).
+8.2 Zustand Store Structure
+// Store modules (separate slices, composed at root)
+authStore: {
+user: User | null
+accessToken: string | null
+refreshToken: string | null
+status: 'unauthenticated' | 'authenticating' | 'authenticated' | 'error'
+login(), logout(), refresh()
+}
+sessionStore: {
+visitorSession: EventSession | null
+exhibitorSession: EventSession | null
+scanCount: number                   // optimistic, synced from Redis counter
+qualifierCounts: QualifierCounts    // HOT/WARM/COLD
+setSession(), clearSession(), incrementScanCount()
+}
+syncStore: {
+status: 'online' | 'offline' | 'syncing' | 'error'
+pendingCount: number                // SQLite pending_captures count
+lastSyncAt: Date | null
+failedItems: SyncQueueItem[]
+sync(), retry(), markFailed()
+}
+captureStore: {
+currentMode: CaptureMode | null
+ocrResult: OcrResult | null
+confidence: FieldConfidenceMap
+reviewState: 'idle' | 'reviewing' | 'submitting' | 'complete'
+setOcrResult(), submit(), reset()
+}
+contactStore: {
+recentContacts: Contact[]           // last-10, shown on home screen
+searchResults: Contact[]
+selectedContact: ContactDetail | null
+search(), fetchDetail(), refresh()
+}
+8.3 Offline-First Architecture
+SQLite (via react-native-quick-sqlite) stores the pending_captures table locally. Schema mirrors the server sync_queue contract:
+CREATE TABLE IF NOT EXISTS pending_captures (
+id                      TEXT PRIMARY KEY,   -- local UUID
+client_idempotency_key  TEXT NOT NULL UNIQUE,
+capture_mode            TEXT NOT NULL,
+session_id              TEXT,
+image_local_uri         TEXT,               -- local file path
+image_storage_path      TEXT,               -- set after S3 upload
+ocr_data                TEXT NOT NULL,      -- JSON blob
+qualifier               TEXT,
+encounter_type          TEXT,
+lead_note               TEXT,
+follow_up_date          TEXT,
+status                  TEXT DEFAULT 'pending',  -- pending|syncing|synced|failed|dead_letter
+retry_count             INTEGER DEFAULT 0,
+created_at              TEXT NOT NULL,      -- ISO 8601
+synced_at               TEXT
+);
+Why SQLite: On-device relational store with ACID guarantees. Survives app restarts, device reboots. FIFO drain order maintained by created_at index. Supports complex conflict state tracking via status column. Alternative (AsyncStorage) lacks transactional semantics required for reliable FIFO drain.
+8.4 OCR Integration
+Google ML Kit Text Recognition V2 is bundled as a native module (react-native-mlkit-ocr or custom bridge). Key implementation constraints:
+ML Kit model must be bundled with the APK (not downloaded at runtime) to support fully offline operation
+Quality gate runs before ML Kit: Laplacian variance for blur detection, aspect ratio for tilt, pixel count for resolution
+Auto-shutter: confidence polling at 200ms intervals; fires when overall confidence > 0.90 sustained for 800ms
+Field extraction: name, company, title, emails[], phones[], website, address — each with confidence score
+Confidence < 0.60 overall after 3 retries triggers manual entry fallback, pre-filling any extracted fields
+9. Admin Dashboard Architecture
+9.1 React Architecture
+React 18 with TypeScript, Vite build, Tailwind CSS. State management via TanStack Query (server state) + Zustand (UI state, auth). No Redux—unnecessary complexity for a data-fetching-centric dashboard.
+Data fetching: TanStack Query with 30-second stale time for analytics, 5-second stale time for session stats (near-real-time). Polling enabled for session detail page (active sessions only). Pagination via cursor-based approach using TanStack Query's infinite queries.
+Table virtualization: TanStack Virtual for contact lists and audit logs exceeding 500 rows. This is non-negotiable for the contacts list which may contain tens of thousands of records per organization.
+9.2 Role-Based UI Rendering
+Role-irrelevant UI elements are hidden, not disabled (per UX specification). Implementation: a PermissionContext provider at app root reads role from the decoded JWT. A usePermission(action) hook returns boolean. Components conditionally render based on this hook, not CSS visibility—hidden elements must not be in the DOM for security.
+Sidebar items (Platform, OCR Monitoring, Tenant Management, Relationship Match Panel) are only rendered for super_admin. Manager-only items (Analytics, Audit Log, Users) are only rendered for manager and super_admin. Employee users see only home and contact management.
+9.3 Export Workflow
+Export is an async operation. UI flow: (1) Manager configures export filters (session, qualifier, date range); (2) POST to API returns export_id immediately; (3) UI polls GET /exports/:id every 2 seconds until status = ready; (4) signed download URL (1-hour TTL) presented as download button. Rate limit enforced server-side (5 exports/hr per org) and displayed in UI as countdown.
+10. Security Architecture
+10.1 Multi-Layer Security Model
+Layer
+Mechanism
+What It Prevents
+Transport
+TLS 1.3 (1.2 minimum), HSTS 1-year, certificate pinning (mobile)
+MitM, traffic interception
+Auth — Token
+RS256 JWT, 1hr TTL, jti blocklist, refresh token rotation
+Token replay, credential theft
+Auth — Rate
+5 failed attempts / 15min / IP → 429 lockout
+Brute force credential attacks
+API — RBAC
+NestJS RolesGuard + TenantGuard before service call
+Privilege escalation, IDOR
+API — Validation
+class-validator global pipe, DTO-level constraints
+Injection attacks, malformed input
+Database — RLS
+PostgreSQL RLS WHERE organization_id = jwt org claim
+Cross-tenant data access
+Storage — URLs
+Signed URLs (1hr TTL, path-scoped, HTTPS only)
+Unauthorized image access
+Secrets
+K8s Secrets + external-secrets-operator + AWS Secrets Manager
+Credential exposure in code/logs
+Audit
+Append-only audit_events, service-role writes only
+Audit trail tampering
+10.2 OWASP Top 10 Coverage
+OWASP Risk
+Mitigation
+A01 Broken Access Control
+RLS + TenantGuard + RolesGuard triple-layer enforcement
+A02 Cryptographic Failures
+AES-256 at rest (Supabase managed), TLS 1.3 in transit, RS256 JWT
+A03 Injection
+class-validator DTOs, parameterized queries via Supabase client, no raw SQL string interpolation
+A04 Insecure Design
+Threat-modeled RBAC matrix, server-wins conflict resolution, immutable audit trail
+A05 Security Misconfiguration
+IaC (Terraform) for all infra, environment parity, secrets via manager
+A06 Vulnerable Components
+Dependabot + Snyk in CI, lock files committed, no transitive dep escalation
+A07 Auth Failures
+RS256, refresh token rotation, jti blocklist, rate-limited login, certificate pinning
+A08 Software Integrity
+GitHub Actions OIDC (no long-lived secrets in CI), signed container images
+A09 Logging Failures
+Structured logging (Datadog), all auth events audited, Sentry for 5xx
+A10 SSRF
+No user-provided URLs processed server-side; signed URL generation origin-restricted
+11. DevOps & Infrastructure
+11.1 Docker Strategy
+Multi-stage Dockerfiles per app with minimal production images:
+API: node:20-alpine base, build stage compiles TypeScript, production stage copies dist/ only. Target image: ~200MB.
+Workers: Same base as API; different CMD entry point (worker bootstrap). Shared image enables unified worker deployment with queue-specific process selection via environment variable.
+Dashboard: nginx:alpine serving pre-built Vite output. Build stage in GitHub Actions produces optimized static bundle.
+11.2 CI/CD Pipeline (GitHub Actions)
+Stage
+Trigger
+Steps
+Gate
+PR Validation
+Pull Request
+Lint, type-check, unit tests, RLS policy tests
+All must pass; no merge bypass
+Integration Tests
+PR + main
+Docker compose up, migration apply, integration test suite
+Pass required
+Build
+main branch push
+Docker build, push to ECR, Vite build + S3 upload
+Image scan (Snyk) must pass
+Deploy Staging
+main branch push
+Helm upgrade staging namespace, smoke tests
+Auto-deploy; auto-rollback on health check failure
+Deploy Production
+Release tag (vX.Y.Z)
+Helm upgrade production namespace, canary rollout
+Manual approval gate; auto-rollback
+Security Scan
+Weekly + on merge
+Snyk + Trivy image scan, SAST
+Critical findings block deploy
+11.3 Kubernetes vs ECS Recommendation
+Recommendation: Kubernetes (EKS or GKE). Rationale: CardVault has 8 independent BullMQ worker deployments each requiring separate HPA (Horizontal Pod Autoscaler) based on queue depth metrics. Kubernetes provides the Keda (Kubernetes Event-Driven Autoscaler) operator which natively scales worker pods based on BullMQ queue depth, a capability ECS Task scaling does not cleanly support without custom CloudWatch metrics. The additional operational complexity of Kubernetes is justified by this requirement.
+API tier: Deployment with HPA (CPU/memory, target 70% CPU)
+Worker tier: 8 Deployments (one per queue), each with KEDA ScaledObject targeting queue depth
+KEDA trigger: BullMQ queue length via Redis metrics; scale up at depth > 50, scale down at depth < 5
+Dashboard: Static assets on Vercel or Cloudflare Pages (zero-ops, global CDN)
+11.4 Monitoring Stack
+Tool
+Purpose
+Key Dashboards
+Datadog
+APM, infrastructure metrics, custom metrics, log aggregation
+API p95 latency, worker queue depth, OCR throughput, sync success rate
+Sentry
+Error tracking, performance monitoring (mobile + API)
+OCR failure rate, sync error breakdown, 5xx rate by endpoint
+BullMQ Dashboard (Bull Board)
+Queue observability, job inspection, DLQ management
+Queue depth per queue, failed jobs, stalled jobs, worker status
+Supabase Dashboard
+Database metrics, query performance, storage usage
+Slow query log, connection pool utilization, storage growth
+PagerDuty / OpsGenie
+Alert routing, on-call escalation
+P1: OCR failure rate > 10%, API 5xx > 1%, sync dead-letter spike
+12. Scalability Planning
+12.1 Bottleneck Analysis
+Bottleneck
+Trigger Threshold
+Mitigation Strategy
+PostgreSQL write throughput
+5,000+ inserts/min sustained
+PgBouncer transaction pooling, batch OCR writes, Redis buffer for counters
+OCR worker queue depth
+> 50 jobs in queue
+KEDA autoscale to max 20 pods; prioritize by capture_mode (exhibitor first)
+Supabase connection limit
+100 concurrent connections
+PgBouncer pools connections; API and worker pods share pool
+Redis memory (Upstash)
+Queue depth × avg payload > plan limit
+Payload offload to PostgreSQL; Redis stores only job_id reference
+Storage egress costs
+> 10TB/month transfers
+Enable Supabase CDN for image delivery; signed URLs cached by client
+Full-text search latency
+> 100ms on 10M+ contacts
+Partial indexes (WHERE deleted_at IS NULL); read replica for search
+Relationship matching CPU
+Trigram matching across 1M+ contacts
+Pre-filter by org (RLS), then email/phone exact before fuzzy; pg_trgm GIN index
+12.2 Partitioning Strategy
+Table partitioning is planned but not required at launch. Partition implementation should be triggered by row count thresholds:
+contacts: HASH partitioning on organization_id (8 partitions) — trigger at 100M rows total. Keeps per-tenant queries on a single partition, avoiding cross-partition scatter.
+contact_encounters: RANGE partitioning on created_at (yearly) — trigger at 50M rows. Time-range queries for relationship history stay within a single partition.
+audit_events: RANGE on created_at (monthly) from day one — legal retention requirement drives this. Old monthly partitions moved to read-only replica after 90 days.
+ocr_jobs: RANGE on created_at (quarterly) — trigger at 20M rows. Enables dropping old partitions once jobs are past retention period.
+13. Performance Optimization Strategy
+13.1 p95 Latency Targets
+Operation
+p95 Target
+Key Optimization
+POST /auth/login
+< 200ms
+Bcrypt work factor tuned to 12; Redis blocklist check O(1)
+GET /contacts (list, 20 items)
+< 150ms
+Composite index (org_id, deleted_at); PgBouncer pool
+GET /contacts/search
+< 200ms
+GIN tsvector index; read replica routing for analytics
+POST /ocr/submit (sync response)
+< 300ms
+Async processing; sync returns after contact write only
+GET /sessions/:id/stats
+< 100ms
+Redis counter read (5s staleness acceptable)
+POST /sessions/:id/export (dispatch)
+< 500ms
+Returns export_id immediately; generation is async
+OCR pipeline end-to-end
+< 10s p95
+Worker concurrency, pre-warmed pools, retry budget
+Offline sync (100 pending captures)
+< 60s
+FIFO parallel upload with 8-worker concurrency
+13.2 Caching Strategy
+Session stats (scan_count, qualifier counts): Redis counter, max 5s staleness. Acceptable for live booth counters.
+JWT jti blocklist: Redis, TTL = remaining token lifetime. O(1) check before any DB access.
+OCR idempotency: Redis, TTL 24h. Prevents duplicate contact creation on mobile retry.
+Org feature flags: Redis, TTL 5 minutes. Avoids DB query for every request flag check.
+Contact search results: NOT cached. Search parameters too variable; staleness unacceptable for dedup.
+Analytics aggregates: Materialized views refreshed every 15 minutes for OCR quality metrics, daily for lead funnel.
+14. Testing Strategy
+14.1 Testing Pyramid
+Level
+Coverage Target
+Tooling
+Key Test Areas
+Unit
+80% line coverage
+Jest + ts-jest
+Service logic, DTO validation, confidence scoring, fuzzy match algorithm, sync state machine
+Integration
+All endpoints + happy/sad paths
+Jest + Supertest + Docker Compose (Supabase)
+Auth flows, RLS enforcement per role, queue job dispatch, idempotency behavior
+RLS Policy
+All tables × all roles × all CRUD ops
+pgTAP (PostgreSQL TAP framework)
+Cross-tenant isolation, manager vs employee access, super_admin bypass verification
+E2E
+Critical user journeys
+Detox (mobile) + Playwright (dashboard)
+Exhibitor scan flow, offline sync flow, export generation, relationship match display
+Queue
+All workers × retry scenarios
+BullMQ test utilities + Jest
+Retry exhaustion, DLQ routing, idempotency replay, payload validation
+Load
+p95 targets at 5x expected load
+k6 or Gatling
+OCR submit burst (3,000/min), concurrent session stats, export queue saturation
+Security
+OWASP checklist
+OWASP ZAP + manual pen test
+Auth bypass, cross-tenant IDOR, rate limit bypass, RLS circumvention
+14.2 RLS Testing Pattern
+RLS policies must be tested at the database layer, not just via API integration tests (which exercise application guards, not RLS directly). Use pgTAP to test each policy:
+-- Example pgTAP RLS test
+SELECT plan(3);
+-- Set JWT context for org_a user
+SET LOCAL request.jwt.claims = '{"organization_id": "org-a-uuid", "role": "employee"}';
+-- org_a user can see org_a contacts
+SELECT ok(EXISTS(SELECT 1 FROM contacts WHERE organization_id = 'org-a-uuid'),
+'org_a user sees own contacts');
+-- org_a user cannot see org_b contacts
+SELECT is((SELECT count(*) FROM contacts WHERE organization_id = 'org-b-uuid')::integer,
+0, 'org_a user cannot see org_b contacts');
+SELECT * FROM finish();
+15. Production Observability
+15.1 Key Metrics and Alert Thresholds
+Metric
+Alert Threshold
+Severity
+Action
+API 5xx rate
+> 1% over 5 min
+P1
+Page on-call; check Sentry for error class
+API p95 latency
+> 500ms over 10 min
+P2
+Check slow query log; PgBouncer pool exhaustion
+OCR failure rate
+> 10% in 1hr window
+P1
+Check ocr_jobs table; worker logs; Datadog alert
+Queue depth (any queue)
+> 500 jobs for > 5 min
+P2
+Check worker health; scale up pods; check for poison message
+Sync dead-letter rate
+> 5 items/hr per org
+P2
+Check sync_queue; notify affected org manager
+Redis memory utilization
+> 80% of plan limit
+P2
+Reduce BullMQ job retention; increase Upstash plan
+Auth failure rate
+> 50 failures/min per IP
+P1
+IP already blocked at 10 attempts; investigate attack vector
+Session counter drift
+> 10 between Redis and DB
+P3
+session-counter-sync job re-runs automatically
+Storage quota per org
+> 80% of org limit
+P3
+Notify org admin; trigger cleanup of old export files
+Relationship match latency
+p95 > 5s
+P3
+Check pg_trgm index; worker concurrency
+15.2 Structured Logging Contract
+All log entries use JSON structured format with mandatory fields:
+{
+"timestamp": "2026-05-22T14:32:00.123Z",
+"level": "info",
+"service": "api | ocr-worker | sync-worker | ...",
+"correlation_id": "req-uuid",
+"organization_id": "org-uuid",   // never for auth endpoints
+"user_id": "user-uuid",
+"action": "contact.created | ocr.submitted | sync.conflict | ...",
+"duration_ms": 142,
+"metadata": {}                     // action-specific context
+}
+Sensitive fields (emails, phone numbers, lead_notes, card image URIs) are never logged in plaintext. Fields are masked or omitted. Log level thresholds: DEBUG only in development, INFO in staging, WARN/ERROR in production unless explicitly toggled.
+16. Engineering Team Structure
+16.1 Recommended Team Topology (Team Topologies Model)
+Squad
+Type
+Members
+Ownership
+Interfaces
+Platform Squad
+Stream-aligned
+4 engineers (1 lead)
+NestJS API, PostgreSQL schema, BullMQ workers, BullMQ queue contracts
+Publishes API contracts; consumes shared-types
+Mobile Squad
+Stream-aligned
+4 engineers (1 lead)
+React Native app, OCR pipeline, offline sync, camera, push notifications
+Consumes API contracts; publishes sync-protocol package
+Intelligence Squad
+Stream-aligned
+3 engineers (1 lead)
+Relationship engine, deduplication algorithm, analytics service, materialized views
+Embedded in Platform Squad's codebase; separate PR ownership
+Infrastructure Squad
+Enabling
+2 engineers
+K8s, CI/CD, Datadog, Sentry, Terraform, secrets management, security
+Enables all squads; owns infra as code
+QA/Reliability
+Enabling
+2 engineers
+E2E test suite, load tests, RLS test suite, security testing
+Embedded in all squad PRs; owns quality gates
+Tech Lead / Architect
+—
+1 engineer
+ADRs, cross-squad API design, scalability decisions, schema change approvals
+Approval gate for schema migrations and queue contract changes
+16.2 Critical Ownership Rules
+Database schema changes require Tech Lead approval + QA RLS test suite pass before merge
+BullMQ queue payload contract changes are breaking changes — require version bump in shared-types and coordinated worker + API deploy
+Security-sensitive changes (JWT handling, RLS policies, rate limits) require Infrastructure Squad review
+All sync protocol changes require Mobile Squad sign-off (deployed APKs cannot be hot-updated)
+17. Delivery Roadmap
+17.1 Phase Plan
+Phase
+Duration
+Key Deliverables
+Critical Dependencies
+Phase 1: Foundation
+Weeks 1–4
+Monorepo, shared-types, CI/CD skeleton, Supabase project setup, base schema (organizations, users), RLS framework, JWT auth, TenantGuard
+Infrastructure Squad sets up K8s + CI/CD first
+Phase 2: Core Backend
+Weeks 3–8
+Sessions, Contacts, Encounters CRUD; BullMQ infrastructure; audit-writes queue; API versioning; RLS test suite
+Phase 1 complete; PgBouncer configured
+Phase 3: OCR Pipeline
+Weeks 5–10
+Image upload, signed URL, OCR submit endpoint, ocr-processing worker, confidence scoring, image-processing worker (thumbnails)
+Supabase Storage configured; ML Kit mobile integration can parallel
+Phase 4: Mobile Foundation
+Weeks 4–12
+React Native navigation, Zustand stores, camera screen, ML Kit OCR, SQLite schema, offline capture, sync engine
+API auth endpoint must be live (Phase 1–2); can parallel with Phase 3
+Phase 5: Relationship Engine
+Weeks 8–14
+Deduplication worker, relationship-matching worker, fuzzy match (pg_trgm), match threshold config, Relationship History Card UI
+Phase 2–3 complete (contacts exist to match against)
+Phase 6: Dashboard
+Weeks 10–16
+React dashboard, session management UI, contacts list + search, analytics panels, export workflow, user management
+Phase 2 API complete; parallel with Phase 5
+Phase 7: Analytics
+Weeks 14–18
+Materialized views, lead funnel, OCR quality panel, encounter type analytics, platform analytics (super_admin)
+Phase 5–6 complete
+Phase 8: Hardening
+Weeks 16–20
+Load testing, security pen test, RLS audit, performance tuning, monitoring dashboards, alert thresholds, DR runbooks
+All features complete
+Phase 9: Scale Readiness
+Weeks 20–24
+KEDA autoscaling, partitioning POC, Upstash plan upgrade, read replica routing, capacity planning documentation
+Phase 8 complete; production metrics baseline established
+17.2 Parallelization Opportunities
+Mobile Squad can begin Phase 4 immediately after Phase 1 delivers auth endpoints (Weeks 4+)
+Dashboard (Phase 6) can begin as soon as Phase 2 core API is stable (Weeks 10+)
+Analytics (Phase 7) can begin as soon as Phase 2 schema is stable; materialized view design is independent
+Infrastructure Squad works continuously across all phases; not a blocker after Phase 1 foundation
+18. Risk Analysis
+18.1 Risk Register
+Risk
+Probability
+Severity
+Mitigation
+Redis loss during active exhibitor session
+Low
+Medium
+System designed ephemeral-first; scan counter reconciliation via PostgreSQL recount; max 5s data inconsistency
+OCR failure rate spike at trade show scale
+Medium
+High
+KEDA autoscaling pre-warmed; manual fallback always available; Super Admin OCR reprocessing from stored images
+Offline sync conflict storm (mass reconnect)
+Medium
+High
+Idempotency keys prevent duplicates; server-wins policy is deterministic; dead-letter surfaced for manual review
+PostgreSQL connection exhaustion under load
+Medium
+Critical
+PgBouncer transaction mode; max connections per pool configured; API/worker pods share pool with limits
+Cross-tenant data leak via RLS bypass
+Low
+Critical
+Triple-layer enforcement (Guard + RLS + Audit); pgTAP RLS test suite in CI; no raw SQL in codebase
+BullMQ poison message (repeated crashes)
+Low
+Medium
+maxStalledCount limit; DLQ routing after retry exhaustion; Bull Board for job inspection
+Mobile APK distribution delay for critical fix
+Medium
+High
+MDM push for enterprise APK; feature flags for server-side behavior toggles; hot-fix via server-side API response
+Relationship matching false positives (wrong merge suggestion)
+Medium
+Medium
+Server presents match as suggestion, not auto-merge; user must confirm; match_confidence logged for threshold tuning
+Supabase vendor lock-in
+Low
+Low
+PostgreSQL 15 compatible; RLS is standard PostgreSQL; Supabase Storage is S3-compatible; migration path to self-hosted PostgREST documented
+Export job timeout for large orgs (50K+ contacts)
+Low
+Medium
+Streaming CSV write; 1,000 contacts per chunk; export-generation worker has 10-minute timeout; pagination for large exports
+18.2 Data Integrity Risks
+Concurrent contact creation (same person scanned by two users simultaneously): Deduplication worker handles this post-creation. Brief window where two contact records exist is acceptable — dedup merges and audit logs the decision within seconds.
+Scan counter drift > 10: Automated detection via session-counter-sync job. Full PostgreSQL recount triggered automatically. Engineering alert fired for investigation.
+Audit log gaps: audit-writes queue has 5 retry attempts before Sentry alert and direct DB fallback. This is the last-resort path — the queue is designed to never lose audit events.
+OCR data corruption (wrong field mapping): Confidence scoring and manual review flow catch low-confidence extractions. Field-level confidence < 0.50 requires mandatory correction before save. Original image always stored for reprocessing.
+CardVault v3.0 — Enterprise Implementation Plan
+Classification: CONFIDENTIAL  |  Version 1.0  |  May 2026
+Derived from: PRD v3.0 + TRD v3.0 + UX Specification v3.0 + Backend Schema v3.0 + App Flow v1.0

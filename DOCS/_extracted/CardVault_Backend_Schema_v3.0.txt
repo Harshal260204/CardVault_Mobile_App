@@ -1,0 +1,1788 @@
+CardVault v3.0
+Backend Schema Documentation
+PostgreSQL 15 · NestJS · Supabase · BullMQ
+Version 3.0  |  CONFIDENTIAL  |  May 2026
+1. Architecture Overview
+1.1 Backend Architecture
+CardVault is a four-tier multi-tenant SaaS platform. All backend state lives in PostgreSQL 15 (Supabase managed). The API tier is stateless and horizontally scalable.
+Tier
+Technology
+Responsibility
+Client
+React Native 0.74+ / React 18 + TS
+Mobile capture, on-device OCR, offline queue, admin dashboard
+API
+NestJS / Node.js 20 LTS
+Business logic, RBAC, auth middleware, rate limiting, REST endpoints
+Workers
+BullMQ + Redis (Upstash)
+Async OCR, dedup, image processing, relationship matching, export, audit
+Data
+PostgreSQL 15 (Supabase) + Supabase Storage
+Multi-tenant RLS-enforced data + S3-compatible object storage
+1.2 PostgreSQL + Supabase Setup
+Managed PostgreSQL 15 with PgBouncer in transaction mode.
+Row Level Security (RLS) enforced on every table — no exceptions.
+Supabase Auth provides RS256 JWT with org_id and role claims.
+Supabase Storage (S3-compatible, AES-256 at rest) for card images.
+Separate Supabase project per environment (dev / staging / prod).
+Read replica used for analytics queries to offload primary.
+1.3 Redis / BullMQ
+Redis (Upstash Serverless) — ephemeral state only. Nothing durable stored solely in Redis.
+Uses: rate limiting counters, JWT jti blocklist, scan_count buffer, BullMQ queue backing.
+scan_count hot-path: Redis INCR per scan → flushed to PG every 5 seconds in batch (prevents row-lock at 1+ scan/sec exhibitor throughput).
+8 named BullMQ queues with independently scaled worker pools.
+1.4 Multi-Tenant Strategy
+Tenant key: organization_id UUID on every table.
+RLS policy on every table: WHERE organization_id = auth.jwt()->>'organization_id'.
+TenantContextMiddleware extracts org claim before any service call.
+TenantGuard rejects cross-tenant requests at API layer (403) before DB query.
+Storage paths namespaced: org/{org_id}/sessions/{session_id}/{contact_id}/.
+1.5 Offline-First Sync Strategy
+Mobile SQLite stores full capture payload in pending_captures table.
+Every capture carries client_idempotency_key (UUID v4).
+On reconnect: sync service drains FIFO via POST /ocr/submit with idempotency key.
+Server-wins on 409 conflict; local version archived in sync_queue with status=dead_letter.
+Session counter reconciliation: session-counter-sync BullMQ job runs post-sync cycle.
+2. Database Schema
+All tables include organization_id (FK → organizations), created_at, updated_at. Soft-delete uses deleted_at TIMESTAMPTZ (nullable). RLS enforces tenant isolation on every table.
+2.1 organizations
+Root tenant entity. One row per enterprise customer.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+Tenant identifier
+name
+TEXT
+NOT NULL
+Display name
+slug
+TEXT
+NOT NULL, UNIQUE
+URL-safe identifier
+plan
+TEXT
+NOT NULL, DEFAULT 'starter'
+starter | growth | enterprise
+settings
+JSONB
+NOT NULL, DEFAULT '{}'
+Feature flags, UI config
+max_users
+INTEGER
+NOT NULL, DEFAULT 50
+License seat cap
+storage_quota_gb
+INTEGER
+NOT NULL, DEFAULT 10
+Object storage quota
+is_active
+BOOLEAN
+NOT NULL, DEFAULT true
+Soft-disable tenant
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+Trigger-maintained
+deleted_at
+TIMESTAMPTZ
+NULL
+Soft delete
+CREATE TABLE organizations (
+id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+name             TEXT        NOT NULL,
+slug             TEXT        NOT NULL UNIQUE,
+plan             TEXT        NOT NULL DEFAULT 'starter'
+CHECK (plan IN ('starter','growth','enterprise')),
+settings         JSONB       NOT NULL DEFAULT '{}',
+max_users        INTEGER     NOT NULL DEFAULT 50,
+storage_quota_gb INTEGER     NOT NULL DEFAULT 10,
+is_active        BOOLEAN     NOT NULL DEFAULT true,
+created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+deleted_at       TIMESTAMPTZ
+);
+2.2 users
+Org-scoped user accounts. Supabase Auth manages credentials; this table holds profile and RBAC data.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id) ON DELETE CASCADE
+Tenant key
+supabase_uid
+UUID
+NOT NULL, UNIQUE
+Supabase Auth UID
+email
+TEXT
+NOT NULL, UNIQUE
+full_name
+TEXT
+NULL
+role
+user_role
+NOT NULL, DEFAULT 'employee'
+employee | manager | super_admin
+is_active
+BOOLEAN
+NOT NULL, DEFAULT true
+Set false on deactivation
+last_active_at
+TIMESTAMPTZ
+NULL
+Updated on each API request
+invited_by
+UUID
+NULL, FK → users(id)
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+deleted_at
+TIMESTAMPTZ
+NULL
+Soft delete; JWT revoked on deactivation
+CREATE TABLE users (
+id               UUID      PRIMARY KEY DEFAULT gen_random_uuid(),
+organization_id  UUID      NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+supabase_uid     UUID      NOT NULL UNIQUE,
+email            TEXT      NOT NULL UNIQUE,
+full_name        TEXT,
+role             user_role NOT NULL DEFAULT 'employee',
+is_active        BOOLEAN   NOT NULL DEFAULT true,
+last_active_at   TIMESTAMPTZ,
+invited_by       UUID      REFERENCES users(id),
+created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+deleted_at       TIMESTAMPTZ
+);
+2.3 contacts
+Core entity. One row per unique person within an organization. v3.0 adds capture_mode, event_session_id, encounter_type, lead_qualifier. All changes are additive and backward-compatible.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+Tenant key
+created_by
+UUID
+NOT NULL, FK → users(id)
+Capturing user
+full_name
+TEXT
+NOT NULL
+company
+TEXT
+NULL
+title
+TEXT
+NULL
+emails
+TEXT[]
+NOT NULL, DEFAULT '{}'
+Array; primary email at index 0
+phones
+TEXT[]
+NOT NULL, DEFAULT '{}'
+Normalized E.164 format
+website
+TEXT
+NULL
+address
+TEXT
+NULL
+linkedin_url
+TEXT
+NULL
+notes
+TEXT
+NULL
+General contact notes
+tags
+TEXT[]
+NOT NULL, DEFAULT '{}'
+User-defined tags
+capture_mode
+capture_mode_enum
+NULL, DEFAULT 'legacy'
+[v3.0] visitor | exhibitor | quick_capture | legacy
+event_session_id
+UUID
+NULL, FK → event_sessions(id)
+[v3.0] Session at first capture
+encounter_type
+TEXT
+NULL
+[v3.0] Quick Capture: flight | b2b | airport | dinner | referral | hallway | other
+lead_qualifier
+lead_qualifier_enum
+NULL
+[v3.0] Exhibitor: hot | warm | cold
+lead_note
+TEXT
+NULL, max 160 chars
+[v3.0] Exhibitor note at capture
+follow_up_date
+DATE
+NULL
+[v3.0] Quick Capture follow-up
+card_image_id
+UUID
+NULL, FK → card_images(id)
+Primary card image
+ocr_confidence
+NUMERIC(4,3)
+NULL, CHECK 0 ≤ x ≤ 1
+Overall OCR confidence score
+is_merged
+BOOLEAN
+NOT NULL, DEFAULT false
+True if merged into another contact
+merged_into_id
+UUID
+NULL, FK → contacts(id)
+Target contact after merge
+search_vector
+TSVECTOR
+GENERATED ALWAYS AS (...) STORED
+Full-text search: name + company + email + tags
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+deleted_at
+TIMESTAMPTZ
+NULL
+Soft delete
+CREATE TABLE contacts (
+id               UUID               PRIMARY KEY DEFAULT gen_random_uuid(),
+organization_id  UUID               NOT NULL REFERENCES organizations(id),
+created_by       UUID               NOT NULL REFERENCES users(id),
+full_name        TEXT               NOT NULL,
+company          TEXT,
+title            TEXT,
+emails           TEXT[]             NOT NULL DEFAULT '{}',
+phones           TEXT[]             NOT NULL DEFAULT '{}',
+website          TEXT,
+address          TEXT,
+linkedin_url     TEXT,
+notes            TEXT,
+tags             TEXT[]             NOT NULL DEFAULT '{}',
+capture_mode     capture_mode_enum  DEFAULT 'legacy',
+event_session_id UUID               REFERENCES event_sessions(id),
+encounter_type   TEXT,
+lead_qualifier   lead_qualifier_enum,
+lead_note        TEXT CHECK (char_length(lead_note) <= 160),
+follow_up_date   DATE,
+card_image_id    UUID               REFERENCES card_images(id),
+ocr_confidence   NUMERIC(4,3)       CHECK (ocr_confidence BETWEEN 0 AND 1),
+is_merged        BOOLEAN            NOT NULL DEFAULT false,
+merged_into_id   UUID               REFERENCES contacts(id),
+search_vector    TSVECTOR           GENERATED ALWAYS AS (
+to_tsvector('english',
+coalesce(full_name,'') || ' ' ||
+coalesce(company,'') || ' ' ||
+coalesce(title,'') || ' ' ||
+array_to_string(emails,' ') || ' ' ||
+array_to_string(tags,' ')
+)) STORED,
+created_at       TIMESTAMPTZ        NOT NULL DEFAULT NOW(),
+updated_at       TIMESTAMPTZ        NOT NULL DEFAULT NOW(),
+deleted_at       TIMESTAMPTZ
+);
+2.4 contact_encounters
+[v3.0 NEW] Append-only log. Each row records one encounter with a contact (a scan, event interaction, or manual addition). One contact can have many encounters across events. This is the relationship history spine.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+contact_id
+UUID
+NOT NULL, FK → contacts(id) ON DELETE CASCADE
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+Denormalized for RLS performance
+session_id
+UUID
+NULL, FK → event_sessions(id)
+NULL for Quick Capture
+captured_by
+UUID
+NOT NULL, FK → users(id)
+User who scanned
+capture_mode
+capture_mode_enum
+NOT NULL
+visitor | exhibitor | quick_capture | legacy
+encounter_type
+TEXT
+NULL
+Quick Capture: flight | b2b | airport | dinner | referral | hallway | other
+encounter_label
+TEXT
+NULL, max 40 chars
+Free-text when encounter_type=other
+lead_qualifier
+lead_qualifier_enum
+NULL
+hot | warm | cold — Exhibitor only
+lead_note
+TEXT
+NULL, max 160 chars
+Exhibitor qualifier note
+follow_up_date
+DATE
+NULL
+Quick Capture follow-up
+notes
+TEXT
+NULL
+Per-encounter note (Visitor mode)
+card_image_id
+UUID
+NULL, FK → card_images(id)
+Card image for this encounter
+ocr_job_id
+UUID
+NULL, FK → ocr_jobs(id)
+OCR job that generated this encounter
+client_idempotency_key
+UUID
+NULL, UNIQUE
+Offline sync dedup key
+created_at
+TIMESTAMPTZ
+NOT NULL, DEFAULT NOW()
+Immutable — no updated_at
+contact_encounters is intentionally append-only. No soft delete — use is_voided BOOLEAN if correction needed. Partitioned by created_at year at 50M+ rows.
+2.5 event_sessions
+[v3.0 NEW] Groups captures by event context. Shared across org members for Visitor/Exhibitor modes.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+Tenant key
+created_by
+UUID
+NOT NULL, FK → users(id)
+Session creator
+name
+TEXT
+NOT NULL
+e.g. "TechExpo 2026 — Booth A"
+mode
+capture_mode_enum
+NOT NULL, CHECK IN ('visitor','exhibitor')
+Quick Capture has no session
+event_type
+TEXT
+NULL
+trade_show | conference | product_demo | networking | other
+location
+TEXT
+NULL
+GPS-assisted or manual
+start_date
+DATE
+NOT NULL, DEFAULT CURRENT_DATE
+end_date
+DATE
+NULL
+status
+session_status_enum
+NOT NULL, DEFAULT 'active'
+active | closed | archived
+scan_count
+INTEGER
+NOT NULL, DEFAULT 0
+Redis-buffered; flushed every 5s
+hot_count
+INTEGER
+NOT NULL, DEFAULT 0
+Exhibitor HOT qualifier count
+warm_count
+INTEGER
+NOT NULL, DEFAULT 0
+Exhibitor WARM qualifier count
+cold_count
+INTEGER
+NOT NULL, DEFAULT 0
+Exhibitor COLD qualifier count
+settings
+JSONB
+NOT NULL, DEFAULT '{}'
+Auto-advance, speed mode, template config
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+deleted_at
+TIMESTAMPTZ
+NULL
+Soft delete
+2.6 session_members
+[v3.0 NEW] Join table tracking which users have joined an event session. Unique constraint prevents double-join.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+session_id
+UUID
+NOT NULL, FK → event_sessions(id) ON DELETE CASCADE
+user_id
+UUID
+NOT NULL, FK → users(id) ON DELETE CASCADE
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+Denormalized for RLS
+joined_at
+TIMESTAMPTZ
+NOT NULL, DEFAULT NOW()
+UNIQUE (session_id, user_id)
+2.7 ocr_jobs
+Tracks each OCR processing job including confidence scores, retry state, and manual fallback.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+contact_id
+UUID
+NULL, FK → contacts(id)
+Set after contact created
+card_image_id
+UUID
+NOT NULL, FK → card_images(id)
+session_id
+UUID
+NULL, FK → event_sessions(id)
+[v3.0]
+capture_mode
+capture_mode_enum
+NULL
+[v3.0]
+submitted_by
+UUID
+NOT NULL, FK → users(id)
+status
+ocr_status_enum
+NOT NULL, DEFAULT 'pending'
+pending | processing | completed | failed | manual_fallback
+raw_text
+TEXT
+NULL
+Raw ML Kit output
+extracted_fields
+JSONB
+DEFAULT '{}'
+Structured field extraction
+confidence_scores
+JSONB
+DEFAULT '{}'
+Per-field confidence (0.0–1.0)
+mean_confidence
+NUMERIC(4,3)
+NULL
+Average across all fields
+retry_count
+INTEGER
+NOT NULL, DEFAULT 0
+Max 3 before manual_fallback
+error_message
+TEXT
+NULL
+Last error for manual fallback
+client_idempotency_key
+UUID
+NOT NULL, UNIQUE
+Offline sync dedup
+processed_at
+TIMESTAMPTZ
+NULL
+Set on completion
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+2.8 card_images
+Metadata record for each uploaded business card image. Actual bytes in Supabase Storage.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+contact_id
+UUID
+NULL, FK → contacts(id)
+Set after contact created
+uploaded_by
+UUID
+NOT NULL, FK → users(id)
+storage_path
+TEXT
+NOT NULL
+org/{org_id}/sessions/{sess_id}/{contact_id}/original.jpg
+thumbnail_path
+TEXT
+NULL
+...thumb_400x300.jpg — set post-processing
+file_size_bytes
+INTEGER
+NOT NULL
+mime_type
+TEXT
+NOT NULL, DEFAULT 'image/jpeg'
+width_px
+INTEGER
+NULL
+height_px
+INTEGER
+NULL
+status
+TEXT
+DEFAULT 'pending'
+pending | confirmed | processing | ready | failed
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+2.9 audit_events
+Immutable, append-only audit trail. No UPDATE or DELETE RLS granted to any role. Retention enforced by archival job.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NULL, FK → organizations(id)
+NULL for platform events
+actor_id
+UUID
+NULL, FK → users(id)
+NULL for system events
+actor_role
+user_role
+NULL
+Snapshot of role at event time
+event_type
+audit_event_type_enum
+NOT NULL
+See Section 4 for enum values
+entity_type
+TEXT
+NOT NULL
+contact | session | user | ocr_job | export | auth
+entity_id
+UUID
+NULL
+FK-less; entity may be deleted
+event_data
+JSONB
+NOT NULL, DEFAULT '{}'
+Full mutation payload, filter criteria, record counts
+ip_address
+INET
+NULL
+user_agent
+TEXT
+NULL
+correlation_id
+UUID
+NULL
+Ties to API request correlation ID
+created_at
+TIMESTAMPTZ
+NOT NULL, DEFAULT NOW()
+Immutable — no updated_at
+2.10 exports
+Tracks async export jobs and their signed download URLs.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+requested_by
+UUID
+NOT NULL, FK → users(id)
+Must be Manager+
+export_type
+TEXT
+NOT NULL
+session_export | contacts_export
+session_id
+UUID
+NULL, FK → event_sessions(id)
+Set for session exports
+filter_criteria
+JSONB
+DEFAULT '{}'
+qualifier_filter, date_range, session_id
+status
+export_status_enum
+DEFAULT 'pending'
+pending | processing | ready | failed | expired
+record_count
+INTEGER
+NULL
+Set on completion
+storage_path
+TEXT
+NULL
+Temp CSV path in Supabase Storage
+signed_url
+TEXT
+NULL
+1hr TTL signed download URL
+signed_url_expires_at
+TIMESTAMPTZ
+NULL
+error_message
+TEXT
+NULL
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+2.11 sync_queue
+Server-side mirror of the mobile offline queue. Records pending, dead-letter, and conflict-archived sync items.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+user_id
+UUID
+NOT NULL, FK → users(id)
+client_idempotency_key
+UUID
+NOT NULL, UNIQUE
+From mobile client
+status
+sync_status_enum
+NOT NULL, DEFAULT 'pending'
+pending | processing | synced | conflict | dead_letter
+payload
+JSONB
+NOT NULL
+Full offline capture payload
+archived_payload
+JSONB
+NULL
+Local version on server-wins conflict
+retry_count
+INTEGER
+NOT NULL, DEFAULT 0
+last_error
+TEXT
+NULL
+synced_at
+TIMESTAMPTZ
+NULL
+Set on successful ingest
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+2.12 notifications
+In-app notification store. Follow-up reminders, OCR reprocess alerts, sync failure alerts.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+user_id
+UUID
+NOT NULL, FK → users(id)
+Target user
+type
+TEXT
+NOT NULL
+follow_up_reminder | ocr_reprocess_alert | sync_failure | relationship_match
+title
+TEXT
+NOT NULL
+body
+TEXT
+NOT NULL
+entity_type
+TEXT
+NULL
+contact | ocr_job | session | sync_queue
+entity_id
+UUID
+NULL
+is_read
+BOOLEAN
+NOT NULL, DEFAULT false
+scheduled_for
+TIMESTAMPTZ
+NULL
+For future follow-up notifications
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+2.13 relationship_matches
+Records each relationship match result and the user's decision. Used for match threshold tuning analytics.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+incoming_ocr_job_id
+UUID
+NOT NULL, FK → ocr_jobs(id)
+The scan that triggered the match
+matched_contact_id
+UUID
+NOT NULL, FK → contacts(id)
+Existing contact matched against
+match_confidence
+NUMERIC(4,3)
+NOT NULL
+Levenshtein-based score 0.0–1.0
+match_signals
+JSONB
+DEFAULT '{}'
+{email_match, phone_match, name_score, company_score}
+user_decision
+TEXT
+NULL
+add_encounter | create_new | view_existing | pending
+decided_by
+UUID
+NULL, FK → users(id)
+decided_at
+TIMESTAMPTZ
+NULL
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+2.14 contact_merge_history
+Preserves all source field values when contacts are merged. Merge is reversible via this table.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+source_contact_id
+UUID
+NOT NULL, FK → contacts(id)
+Merged-from contact
+target_contact_id
+UUID
+NOT NULL, FK → contacts(id)
+Merged-into contact
+source_snapshot
+JSONB
+NOT NULL
+Full contacts row snapshot at merge time
+merged_by
+UUID
+NOT NULL, FK → users(id)
+Must be Manager+
+merge_reason
+TEXT
+NULL
+Admin-entered justification
+is_reversed
+BOOLEAN
+NOT NULL, DEFAULT false
+reversed_by
+UUID
+NULL, FK → users(id)
+reversed_at
+TIMESTAMPTZ
+NULL
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+2.15 role_permissions
+Configuration table for fine-grained permission overrides. Base permissions are hardcoded in NestJS guards; this table enables per-org overrides.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+role
+user_role
+NOT NULL
+resource
+TEXT
+NOT NULL
+e.g. contacts.export, sessions.close
+action
+TEXT
+NOT NULL
+create | read | update | delete | export
+is_allowed
+BOOLEAN
+NOT NULL, DEFAULT true
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+UNIQUE (organization_id, role, resource, action)
+2.16 api_keys
+Machine-to-machine API access. Scoped to organization. Hashed — plaintext never stored.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NOT NULL, FK → organizations(id)
+created_by
+UUID
+NOT NULL, FK → users(id)
+Must be Manager+
+name
+TEXT
+NOT NULL
+Human-readable label
+key_hash
+TEXT
+NOT NULL, UNIQUE
+bcrypt/SHA-256 hash
+key_prefix
+TEXT
+NOT NULL
+First 8 chars for identification
+scopes
+TEXT[]
+NOT NULL, DEFAULT '{}'
+e.g. {contacts.read, exports.create}
+last_used_at
+TIMESTAMPTZ
+NULL
+expires_at
+TIMESTAMPTZ
+NULL
+NULL = no expiry
+is_active
+BOOLEAN
+NOT NULL, DEFAULT true
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+revoked_at
+TIMESTAMPTZ
+NULL
+2.17 feature_flags
+Per-org feature flag overrides for gradual rollout and A/B testing.
+Column
+Type
+Constraints / Default
+Notes
+id
+UUID
+PK, DEFAULT gen_random_uuid()
+organization_id
+UUID
+NULL, FK → organizations(id)
+NULL = global default
+flag_key
+TEXT
+NOT NULL
+e.g. relationship_matching_v2, auto_advance_exhibitor
+is_enabled
+BOOLEAN
+NOT NULL, DEFAULT false
+config
+JSONB
+DEFAULT '{}'
+Flag-specific config payload
+created_at
+TIMESTAMPTZ
+DEFAULT NOW()
+updated_at
+TIMESTAMPTZ
+DEFAULT NOW()
+UNIQUE (organization_id, flag_key)
+3. Entity Relationships
+3.1 ERD — Core Entities (Mermaid)
+erDiagram
+organizations ||--o{ users : "has"
+organizations ||--o{ contacts : "owns"
+organizations ||--o{ event_sessions : "hosts"
+organizations ||--o{ audit_events : "generates"
+organizations ||--o{ exports : "requests"
+users ||--o{ contacts : "captures"
+users ||--o{ event_sessions : "creates"
+users ||--o{ session_members : "joins"
+users ||--o{ contact_encounters : "captures"
+users ||--o{ audit_events : "actors"
+event_sessions ||--o{ session_members : "has"
+event_sessions ||--o{ contacts : "groups"
+event_sessions ||--o{ contact_encounters : "contains"
+event_sessions ||--o{ exports : "exported_to"
+contacts ||--o{ contact_encounters : "has_history"
+contacts ||--|| card_images : "primary_image"
+contacts ||--o{ ocr_jobs : "created_via"
+contacts ||--o{ relationship_matches : "matched_as"
+contacts ||--o{ contact_merge_history : "source"
+contacts ||--o{ contact_merge_history : "target"
+ocr_jobs ||--|| card_images : "processes"
+ocr_jobs ||--o{ contact_encounters : "generates"
+3.2 Relationship Rules
+Relationship
+Type
+Cascade Rule
+Notes
+organizations → users
+1:N
+ON DELETE CASCADE
+Deactivating org soft-deletes all users
+organizations → contacts
+1:N
+ON DELETE CASCADE
+RLS enforced
+organizations → event_sessions
+1:N
+ON DELETE CASCADE
+event_sessions → contacts
+1:N
+ON DELETE SET NULL
+Contact preserved if session deleted
+event_sessions → session_members
+1:N
+ON DELETE CASCADE
+contacts → contact_encounters
+1:N
+ON DELETE CASCADE
+Append-only timeline
+contacts → card_images
+1:1
+ON DELETE SET NULL
+Primary image reference
+ocr_jobs → card_images
+N:1
+ON DELETE RESTRICT
+Image required for job
+contacts → contact_merge_history
+1:N (source)
+ON DELETE RESTRICT
+Preserve merge audit
+4. Enum Definitions
+-- User roles (RBAC)
+CREATE TYPE user_role AS ENUM ('employee', 'manager', 'super_admin');
+-- Capture mode — set on contacts, contact_encounters, ocr_jobs, event_sessions
+CREATE TYPE capture_mode_enum AS ENUM ('visitor', 'exhibitor', 'quick_capture', 'legacy');
+-- Lead qualifier — Exhibitor mode only
+CREATE TYPE lead_qualifier_enum AS ENUM ('hot', 'warm', 'cold');
+-- Event session lifecycle
+CREATE TYPE session_status_enum AS ENUM ('active', 'closed', 'archived');
+-- OCR job processing state
+CREATE TYPE ocr_status_enum AS ENUM (
+'pending', 'processing', 'completed', 'failed', 'manual_fallback'
+);
+-- Export job lifecycle
+CREATE TYPE export_status_enum AS ENUM (
+'pending', 'processing', 'ready', 'failed', 'expired'
+);
+-- Offline sync lifecycle
+CREATE TYPE sync_status_enum AS ENUM (
+'pending', 'processing', 'synced', 'conflict', 'dead_letter'
+);
+-- Audit event types
+CREATE TYPE audit_event_type_enum AS ENUM (
+'auth.login', 'auth.logout', 'auth.refresh', 'auth.failed',
+'user.invited', 'user.deactivated', 'user.role_changed',
+'contact.created', 'contact.updated', 'contact.deleted', 'contact.merged',
+'contact.exported',
+'session.created', 'session.closed', 'session.deleted', 'session.exported',
+'session.member_joined',
+'encounter.created', 'encounter.updated',
+'ocr.submitted', 'ocr.completed', 'ocr.failed', 'ocr.reprocessed',
+'relationship.match_found', 'relationship.decision_made',
+'sync.conflict', 'sync.dead_letter',
+'export.created', 'export.downloaded'
+);
+-- Quick Capture encounter types (stored as TEXT with CHECK constraint)
+-- 'flight' | 'b2b' | 'airport' | 'dinner' | 'referral' | 'hallway' | 'other'
+-- Event session types (stored as TEXT with CHECK constraint)
+-- 'trade_show' | 'conference' | 'product_demo' | 'networking' | 'other'
+5. Indexing Strategy
+Table
+Index Columns
+Type
+Purpose
+contacts
+search_vector
+GIN
+Full-text search: name, company, email, tags
+contacts
+emails (array)
+GIN
+Email dedup lookups — O(1) exact match
+contacts
+phones (array)
+GIN
+Phone dedup lookups
+contacts
+(organization_id, deleted_at)
+B-Tree
+Soft-delete filter — all contact queries
+contacts
+(organization_id, capture_mode)
+B-Tree
+Mode analytics and filter
+contacts
+(event_session_id)
+B-Tree
+Session contact list queries
+contacts
+(event_session_id, lead_qualifier)
+B-Tree
+Lead funnel filter + export
+contacts
+(organization_id, created_by)
+B-Tree
+Per-user contact list (employee scope)
+contacts
+(full_name, company) trgm
+GIN (pg_trgm)
+Fuzzy name+company dedup match
+event_sessions
+(organization_id, status)
+B-Tree
+Session list queries with status filter
+event_sessions
+(organization_id, mode, start_date)
+B-Tree
+Mode-filtered analytics
+session_members
+(session_id, user_id)
+B-Tree UNIQUE
+Prevents double-join; member lookup
+contact_encounters
+(contact_id, created_at DESC)
+B-Tree
+Relationship history timeline — hot path
+contact_encounters
+(session_id)
+B-Tree
+Session-scoped encounter queries
+contact_encounters
+(organization_id, created_at)
+B-Tree
+Analytics time-range queries
+ocr_jobs
+(organization_id, status)
+B-Tree
+Pending/failed job monitoring
+ocr_jobs
+(organization_id, mean_confidence)
+B-Tree
+OCR quality analytics
+ocr_jobs
+client_idempotency_key
+B-Tree UNIQUE
+Offline sync idempotency
+audit_events
+(organization_id, created_at DESC)
+B-Tree
+Audit log time-range queries
+audit_events
+(organization_id, event_type)
+B-Tree
+Event type filtering
+sync_queue
+client_idempotency_key
+B-Tree UNIQUE
+Idempotency check on sync ingest
+sync_queue
+(user_id, status)
+B-Tree
+Per-user queue status
+relationship_matches
+(organization_id, matched_contact_id)
+B-Tree
+Match history per contact
+notifications
+(user_id, is_read, scheduled_for)
+B-Tree
+Notification feed queries
+-- Enable trigram extension for fuzzy matching
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- GIN full-text index on contacts
+CREATE INDEX idx_contacts_search ON contacts USING GIN (search_vector);
+-- GIN array indexes for deduplication
+CREATE INDEX idx_contacts_emails ON contacts USING GIN (emails);
+CREATE INDEX idx_contacts_phones ON contacts USING GIN (phones);
+-- Trigram index for fuzzy name+company matching
+CREATE INDEX idx_contacts_name_trgm ON contacts
+USING GIN ((full_name || ' ' || coalesce(company,'')) gin_trgm_ops);
+-- Composite index for session contact list (most common query)
+CREATE INDEX idx_contacts_session ON contacts (event_session_id)
+WHERE deleted_at IS NULL;
+-- Lead funnel index
+CREATE INDEX idx_contacts_session_qualifier ON contacts
+(event_session_id, lead_qualifier) WHERE deleted_at IS NULL;
+-- Relationship history hot path
+CREATE INDEX idx_encounters_contact_time ON contact_encounters
+(contact_id, created_at DESC);
+6. Multi-Tenant & RLS Design
+6.1 Tenant Isolation Strategy
+Every table carries organization_id UUID NOT NULL (with FK to organizations).
+organization_id is extracted from JWT claim: auth.jwt()->>'organization_id'.
+TenantContextMiddleware (NestJS) sets request-scoped tenant before service calls.
+TenantGuard rejects mismatched org in URL vs JWT claim with 403 before any DB query.
+Storage paths are org-namespaced; bucket policies enforce cross-tenant isolation.
+6.2 JWT Claim Mapping
+JWT Claim
+Maps To
+Used By
+sub
+users.id
+Actor identification in audit events
+org
+users.organization_id
+RLS policy: auth.jwt()->>'org'
+role
+users.role
+RolesGuard, RLS role checks
+jti
+Redis blocklist key
+Token revocation on logout/deactivation
+exp
+Token expiry (1hr)
+JwtAuthGuard validation
+6.3 RLS Policy Examples
+-- Enable RLS on all tenant tables
+ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contact_encounters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ocr_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_events ENABLE ROW LEVEL SECURITY;
+-- contacts: employees read own org; write own captures; managers write all org
+CREATE POLICY contacts_select ON contacts
+FOR SELECT USING (organization_id = (auth.jwt()->>'org')::uuid);
+CREATE POLICY contacts_insert ON contacts
+FOR INSERT WITH CHECK (
+organization_id = (auth.jwt()->>'org')::uuid
+);
+CREATE POLICY contacts_update ON contacts
+FOR UPDATE USING (
+organization_id = (auth.jwt()->>'org')::uuid AND (
+created_by = (auth.jwt()->>'sub')::uuid OR
+(auth.jwt()->>'role') IN ('manager', 'super_admin')
+)
+);
+-- audit_events: append-only; no update/delete for any role
+CREATE POLICY audit_select ON audit_events
+FOR SELECT USING (
+organization_id = (auth.jwt()->>'org')::uuid OR
+(auth.jwt()->>'role') = 'super_admin'
+);
+CREATE POLICY audit_insert ON audit_events
+FOR INSERT WITH CHECK (true); -- service role only via server
+-- NO UPDATE / DELETE policy on audit_events (enforced by absence)
+-- event_sessions: org-scoped read; creator or manager close
+CREATE POLICY sessions_select ON event_sessions
+FOR SELECT USING (organization_id = (auth.jwt()->>'org')::uuid);
+CREATE POLICY sessions_update ON event_sessions
+FOR UPDATE USING (
+organization_id = (auth.jwt()->>'org')::uuid AND (
+created_by = (auth.jwt()->>'sub')::uuid OR
+(auth.jwt()->>'role') IN ('manager', 'super_admin')
+)
+);
+-- super_admin bypass: use service role JWT for platform operations
+-- TenantGuard skips org check when role = super_admin
+7. Offline Sync Schema
+7.1 Mobile SQLite Schema (pending_captures)
+-- SQLite on-device schema (react-native-sqlite-storage)
+CREATE TABLE pending_captures (
+id                      TEXT PRIMARY KEY,  -- local UUID v4
+client_idempotency_key  TEXT NOT NULL UNIQUE,
+capture_mode            TEXT NOT NULL,
+session_id              TEXT,
+lead_qualifier          TEXT,
+lead_note               TEXT,
+encounter_type          TEXT,
+encounter_label         TEXT,
+follow_up_date          TEXT,
+notes                   TEXT,
+ocr_fields_json         TEXT NOT NULL,    -- JSON blob
+confidence_json         TEXT NOT NULL,    -- JSON blob
+image_local_uri         TEXT NOT NULL,    -- file:// path
+image_uploaded          INTEGER DEFAULT 0, -- 0/1 bool
+upload_storage_path     TEXT,
+sync_status             TEXT DEFAULT 'pending',
+retry_count             INTEGER DEFAULT 0,
+created_at              TEXT NOT NULL,    -- ISO8601
+synced_at               TEXT
+);
+CREATE TABLE cached_sessions (
+id          TEXT PRIMARY KEY,
+name        TEXT NOT NULL,
+mode        TEXT NOT NULL,
+scan_count  INTEGER DEFAULT 0,
+status      TEXT DEFAULT 'active',
+updated_at  TEXT NOT NULL
+);
+7.2 Server-Side Sync Flow
+Step
+Action
+Behavior
+1 — Client reconnects
+syncStore activates sync service
+FIFO drain of pending_captures
+2 — Image upload
+POST /images/upload-url → PUT to S3
+Completes before OCR submit
+3 — OCR submit
+POST /ocr/submit with client_idempotency_key
+Server checks sync_queue table for key
+4a — Already processed (200)
+Server returns existing contact_id
+Client marks item synced; no duplicate created
+4b — New (201)
+Contact + encounter created; sync_queue row inserted
+Relationship matching job enqueued
+5 — Conflict (409)
+Server-wins; local payload archived in sync_queue.archived_payload
+status=conflict; client shows "synced (server version)"
+6 — Repeated failure (3x)
+sync_queue.status = dead_letter
+Surfaced in Sync Status screen as "failed · Retry"
+7 — Counter reconcile
+session-counter-sync BullMQ job
+server_count + unsynced count = reconciled total
+7.3 Idempotency & Deduplication
+client_idempotency_key (UUID v4) generated on mobile at capture time.
+UNIQUE constraint on sync_queue.client_idempotency_key prevents double-insert.
+Server checks key in Redis cache (TTL 24h) first for O(1) dedup; falls back to DB.
+Returns HTTP 200 with existing contact_id if already processed.
+Returns HTTP 201 with new contact_id if processed fresh.
+8. OCR & Image Pipeline Schema
+8.1 Processing Flow
+Stage
+Component
+Action
+1 — On-device OCR
+Google ML Kit Text Recognition V2
+Extracts fields + per-field confidence (0.0–1.0)
+2 — Quality gate
+React Native camera screen
+Min resolution 800×600; blur (Laplacian); tilt check
+3 — Upload URL
+POST /images/upload-url
+Returns signed S3 PUT URL (15min TTL)
+4 — Image upload
+Client → Supabase Storage
+Path: org/{org_id}/sessions/{sess_id}/{contact_id}/original.jpg
+5 — Confirm
+POST /images/:id/confirm
+Enqueues image-processing BullMQ job
+6 — Thumbnail
+image-processing worker
+400×300 JPEG q70 at ...thumb_400x300.jpg
+7 — OCR submit
+POST /ocr/submit
+Creates ocr_jobs row; enqueues ocr-processing job
+8 — Field classification
+ocr-processing worker
+Normalizes fields; computes mean_confidence
+9 — Contact creation
+contacts module
+Writes contact + encounter; enqueues dedup job
+10 — Deduplication
+deduplication worker
+Email exact + phone exact + name+company fuzzy
+11 — Relationship match
+relationship-matching worker
+Cross-event history check; pushes result to client
+8.2 Storage Path Convention
+-- Original image
+org/{organization_id}/sessions/{session_id}/{contact_id}/original.jpg
+-- Thumbnail (generated post-upload)
+org/{organization_id}/sessions/{session_id}/{contact_id}/thumb_400x300.jpg
+-- Quick Capture (no session)
+org/{organization_id}/quick/{contact_id}/original.jpg
+-- Export files (temp, 1hr signed URL)
+org/{organization_id}/exports/{export_id}/contacts_export.csv
+-- Signed URL TTL: 1 hour for images, 1 hour for exports
+-- Bucket-level policy: only service role can write; signed URLs for reads
+8.3 Confidence Scoring
+Threshold
+Status
+UI Treatment
+Server Action
+>= 0.90
+High confidence
+Auto-shutter; no flag
+Field accepted as-is
+0.70–0.89
+Review
+Amber highlight on field
+Field editable; accepted on submit
+0.50–0.69
+Verify (red)
+Red flag; mandatory correction
+Block save until corrected
+< 0.60 overall OR 3 retries
+Manual fallback
+Retake/manual entry prompt
+ocr_jobs.status = manual_fallback
+8.4 OCR Reprocessing
+Triggered by: POST /ocr/reprocess/:id (Super Admin only).
+Reads original image from storage_path; re-runs field classification worker.
+Creates new ocr_jobs row with status=pending; links to same card_image_id.
+Does not re-capture — uses stored original image.
+Old ocr_jobs row preserved for audit diff.
+9. Relationship Intelligence Schema
+9.1 Deduplication & Match Logic
+Signal
+Method
+Match Condition
+Weight
+Email
+Exact match (normalized)
+Any email in emails[] matches
+High — definitive
+Phone
+Exact match (E.164 normalized)
+Any phone in phones[] matches
+High — definitive
+Name + Company
+Levenshtein / trigram similarity
+Score ≥ 0.85 on name AND ≥ 0.80 on company
+Medium — contextual
+Name only
+Trigram similarity
+Score ≥ 0.92 (high threshold)
+Low — supplemental
+Match is scoped to organization_id. Cross-org matching is never performed. Match threshold is configurable via feature_flags.config.
+9.2 Encounter History Timeline Query
+-- Relationship history for a contact (ordered timeline)
+SELECT
+ce.id, ce.capture_mode, ce.encounter_type, ce.lead_qualifier,
+ce.lead_note, ce.notes, ce.follow_up_date, ce.created_at,
+es.name AS session_name, es.event_type, es.start_date,
+u.full_name AS captured_by_name
+FROM contact_encounters ce
+LEFT JOIN event_sessions es ON ce.session_id = es.id
+JOIN users u ON ce.captured_by = u.id
+WHERE ce.contact_id = $1
+AND ce.organization_id = $2
+ORDER BY ce.created_at DESC;
+-- Index used: idx_encounters_contact_time (contact_id, created_at DESC)
+9.3 Fuzzy Match Optimization
+pg_trgm extension with GIN index on (full_name || company) enables fast similarity queries.
+Match query scoped to organization_id first to minimize comparator set.
+Email/phone exact match checked first (O(1) via GIN array index); fuzzy match only if no exact hit.
+relationship_matches table records every match result for threshold tuning analytics.
+Match job triggered async post-OCR; does not block contact creation response.
+10. Audit & Compliance Schema
+10.1 Audit Design Principles
+audit_events is append-only. No UPDATE or DELETE RLS policy exists for any role.
+Written via service role (bypasses user RLS) to guarantee immutability.
+Every mutation event carries: actor_id, actor_role snapshot, entity_id, event_data JSONB, ip_address, correlation_id.
+Export events include: filter criteria, qualifier filter, record count, actor identity.
+Relationship match decisions include: match_confidence, contact_ids, user_decision.
+Retention: 7-year archive via pg_partman range partitioning on created_at.
+10.2 Audit Event Coverage
+Category
+Events Logged
+Key Payload Fields
+Auth
+login, logout, refresh, failed attempts
+ip_address, user_agent, jti
+User Management
+invited, deactivated, role_changed
+target_user_id, new_role, actor_role
+Contact Mutations
+created, updated, deleted, merged
+field_changes JSONB diff, merge_source_id
+Contact Export
+export created, download triggered
+filter_criteria, qualifier_filter, record_count
+Sessions
+created, closed, deleted, member_joined
+session_name, mode, team_size
+Session Export
+export created, download triggered
+session_id, qualifier_filter, record_count
+OCR
+submitted, completed, failed, reprocessed
+mean_confidence, retry_count, card_image_id
+Relationship
+match_found, decision_made
+match_confidence, user_decision, contact_ids
+Sync
+conflict, dead_letter
+client_idempotency_key, archived_payload
+10.3 Archival Strategy
+Partition audit_events by created_at month using pg_partman.
+Partitions older than 90 days moved to cold storage (read-only replica).
+Partitions older than 7 years dropped per data retention policy (configurable per org).
+contact_encounters partitioned by created_at year at 50M+ rows.
+11. Queue & Background Job Design
+Queue
+Trigger
+Workers / Concurrency
+Retry Policy
+Payload (key fields)
+ocr-processing
+POST /ocr/submit
+5 / 5
+3x exponential backoff
+ocr_job_id, card_image_id, extracted_fields, confidence_scores
+deduplication
+Post-OCR ingest
+3 / 3
+2x 5s fixed delay
+contact_id, emails[], phones[], full_name, company, organization_id
+relationship-matching
+Post-dedup (no match)
+5 / 5
+2x 3s fixed delay
+contact_id, organization_id, match_signals
+image-processing
+POST /images/:id/confirm
+4 / 4
+2x 3s fixed delay
+card_image_id, storage_path, target_dims: [400,300]
+export-generation
+POST /*/export
+2 / 2
+1x 30s delay
+export_id, filter_criteria, session_id, qualifier_filter
+sync-ingest
+Offline reconnect
+8 / 8
+3x exponential backoff
+client_idempotency_key, payload (full capture)
+session-counter-sync
+Post-sync cycle
+3 / 3
+3x exponential backoff
+session_id, redis_delta, expected_total
+audit-writes
+All mutation events
+2 / 2
+5x 2s fixed delay
+event_type, actor_id, entity_id, event_data, ip_address
+11.1 Failure Handling
+ocr-processing: after 3 retries → ocr_jobs.status = failed; notification sent to org manager.
+deduplication: after 2 retries → contact marked as needs_review; no duplicate block.
+export-generation: after 1 retry → exports.status = failed; user notified via in-app notification.
+sync-ingest: after 3 retries → sync_queue.status = dead_letter; surfaced in Sync Status screen.
+audit-writes: after 5 retries → log to Sentry with full payload; secondary PG insert via direct DB call.
+11.2 Redis Scan Counter Buffer
+-- On each exhibitor scan (API layer, not DB)
+INCR scan_count:session:{session_id}
+INCR qualifier_count:{session_id}:{qualifier}  -- hot|warm|cold
+-- BullMQ session-counter-sync job (every 5 seconds)
+-- 1. GET scan_count:session:{session_id} from Redis
+-- 2. GETDEL to atomically read and clear
+-- 3. UPDATE event_sessions SET
+--      scan_count = scan_count + delta,
+--      hot_count  = hot_count  + hot_delta,
+--      ...
+--    WHERE id = session_id
+-- 4. If reconciliation drift > 10: trigger full recount
+12. API ↔ Schema Mapping
+Endpoint
+Method
+Primary Tables
+Key Operations
+/auth/login
+POST
+users
+SELECT by email; write audit_events(auth.login); return JWT
+/auth/logout
+POST
+audit_events
+Redis: SET jti blocklist; write audit_events(auth.logout)
+/auth/refresh
+POST
+users
+Validate refresh token; rotate; Redis: revoke old jti
+/contacts
+GET
+contacts, contact_encounters
+SELECT + GIN search; org-scoped; soft-delete filter
+/contacts
+POST
+contacts, contact_encounters, card_images
+INSERT contact + encounter; enqueue dedup job; audit
+/contacts/:id
+PUT
+contacts
+UPDATE; org+owner check; write audit_events(contact.updated)
+/contacts/:id
+DELETE
+contacts
+Soft delete (SET deleted_at); audit
+/contacts/search
+GET
+contacts
+GIN tsvector search + trigram; org-scoped
+/contacts/export
+POST
+exports, contacts
+INSERT exports row; enqueue export-generation; return export_id
+/contacts/:id/encounters
+GET
+contact_encounters, event_sessions
+Timeline ORDER BY created_at DESC
+/sessions
+POST
+event_sessions, session_members, audit_events
+INSERT session; auto-join creator; audit
+/sessions
+GET
+event_sessions, session_members
+List org sessions; filter by mode/status
+/sessions/:id/join
+POST
+session_members
+INSERT IGNORE (UNIQUE constraint); audit
+/sessions/:id/stats
+GET
+event_sessions, contacts
+Aggregate: scan_count, HOT/WARM/COLD; Redis + DB
+/sessions/:id/close
+POST
+event_sessions
+UPDATE status=closed; audit; creator/manager only
+/sessions/:id/export
+POST
+exports, contacts, contact_encounters
+Manager+; INSERT exports; enqueue job
+/ocr/submit
+POST
+ocr_jobs, contacts, contact_encounters, sync_queue
+Idempotency check; INSERT ocr_job; enqueue ocr-processing
+/ocr/jobs/:id
+GET
+ocr_jobs
+Poll for async result; status check
+/ocr/reprocess/:id
+POST
+ocr_jobs, card_images
+Super Admin; re-enqueue from stored image
+/images/upload-url
+POST
+card_images
+INSERT card_images(status=pending); return signed PUT URL
+/images/:id/confirm
+POST
+card_images
+UPDATE status=confirmed; enqueue image-processing
+/relationship/match
+POST
+relationship_matches, contact_encounters, contacts
+Async; INSERT match result; push to client
+/encounters/:id
+PATCH
+contact_encounters
+Update qualifier/note post-capture; audit
+/analytics/lead-funnel
+GET
+event_sessions, contact_encounters
+Aggregate HOT/WARM/COLD by session
+/analytics/encounter-types
+GET
+contact_encounters
+GROUP BY encounter_type; 90-day window
+/analytics/platform
+GET
+ALL
+Super Admin; cross-tenant aggregates
+/admin/audit-logs
+GET
+audit_events
+Manager+; org-scoped; time-range filter
+/admin/organizations
+GET/POST/PATCH
+organizations
+Super Admin only; tenant CRUD
+13. Scalability Considerations
+13.1 Partitioning Strategy
+Table
+Partition Strategy
+Trigger Threshold
+Key
+contacts
+HASH on organization_id (8 partitions)
+100M+ rows total
+Keeps per-tenant queries on single partition
+contact_encounters
+RANGE on created_at (yearly)
+50M+ rows total
+Time-range queries stay local to partition
+audit_events
+RANGE on created_at (monthly)
+All environments
+Cold archive of old months; legal retention
+ocr_jobs
+RANGE on created_at (quarterly)
+20M+ rows
+Old jobs archivable without index bloat
+13.2 Hot-Row Mitigation
+event_sessions.scan_count: never incremented directly in PostgreSQL. Redis INCR + 5s batch flush prevents row-lock at exhibitor scan rates (tested: 10+ scans/sec).
+contacts INSERT: PgBouncer transaction mode pools connections; no per-insert connection overhead.
+Deduplication: GIN array index on emails/phones provides O(1) lookup vs table scan.
+13.3 Read/Write Optimization
+Analytics endpoints (/analytics/*) routed to Supabase read replica.
+Contact search uses GIN tsvector index; avoids full table scan.
+Session contact list uses composite index (event_session_id, deleted_at IS NULL).
+BullMQ workers scaled independently from API tier; queue depth triggers autoscaling.
+13.4 Archival Strategy
+Sessions older than 2 years: status → archived; excluded from active session queries.
+audit_events partitions older than 90 days: moved to read-only replica.
+Export files: signed URL expires in 1hr; Supabase lifecycle rule deletes file after 24hr.
+Soft-deleted contacts excluded from all queries via partial index (WHERE deleted_at IS NULL).
+14. Security Considerations
+14.1 JWT Validation
+Algorithm: RS256 (asymmetric). Private key in secrets manager (never in code/env).
+Claims validated: sub, org, role, exp, jti. Invalid or missing claims → 401.
+jti blocklist in Redis with TTL = remaining token expiry (checked before DB access).
+Refresh tokens: 30-day expiry, rotated on every use; previous invalidated.
+Certificate pinning in React Native APK for API domain.
+14.2 Rate Limiting
+Scope
+Limit
+Storage
+Behavior on Exceed
+Global (per user)
+1,000 req / 15 min
+Redis sliding window
+429 + Retry-After header
+OCR submit
+30 req / min
+Redis per-user counter
+429 + Retry-After header
+Image upload
+20 req / min
+Redis per-user counter
+429
+Export
+5 req / hr (per org)
+Redis per-org counter
+429 + Retry-After header
+Auth failed
+5 attempts / 15 min / IP
+Redis per-IP counter
+429 lockout; Sentry alert at 10x
+14.3 Encryption
+Data at rest: AES-256 via Supabase managed PostgreSQL encryption + Supabase Storage.
+Transport: TLS 1.3 enforced; TLS 1.2 minimum fallback; HSTS 1-year max-age.
+Signed URLs: 1-hour TTL, HTTPS only, path-scoped (cannot access other org paths).
+Lead notes, encounter notes, contact PII: subject to same AES-256 at rest.
+API keys: bcrypt-hashed before storage; plaintext never persisted.
+14.4 RBAC Enforcement
+Layer 1: NestJS RolesGuard — rejects insufficient role before service call.
+Layer 2: TenantGuard — rejects cross-org URL parameters before DB query.
+Layer 3: Supabase RLS — DB-enforced, prevents bypass even with direct DB access.
+Layer 4: Audit — all role-gated mutations logged with actor_role snapshot.
+15. Quick Reference — Schema Change Checklist
+Apply to every new table or column addition in a multi-tenant migration.
+Add organization_id UUID NOT NULL REFERENCES organizations(id) to every new table.
+Enable RLS: ALTER TABLE <table> ENABLE ROW LEVEL SECURITY.
+Create SELECT, INSERT, UPDATE policies scoped to auth.jwt()->>'org'.
+Determine if table needs soft-delete (deleted_at TIMESTAMPTZ) or hard-delete.
+Add created_at NOT NULL DEFAULT NOW(); add updated_at if mutable.
+Determine trigger for updated_at maintenance (trigger function or application-managed).
+Add composite index (organization_id, <primary_filter_column>) as minimum.
+If full-text searchable: add TSVECTOR GENERATED column + GIN index.
+If dedup-critical arrays (emails, phones): add GIN index on array column.
+If high-volume insert table: evaluate Redis buffer → batch flush pattern.
+If append-only (audit, encounters): omit UPDATE/DELETE RLS policies.
+Add BullMQ job if mutation requires async side effects (OCR, dedup, audit).
+Register entity_type in audit_event_type_enum and audit-writes queue payload.
+CardVault v3.0 Backend Schema Documentation  |  CONFIDENTIAL  |  May 2026  |  Generated from PRD v3.0 + TRD v3.0 + UX Spec v3.0 + App Flow v1.0

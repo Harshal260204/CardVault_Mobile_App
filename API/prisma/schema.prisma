@@ -1,0 +1,498 @@
+// CardVault Backend Schema v3.0 — Prisma mirror (source: CardVault_Backend_Schema_v3.0)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  user
+  super_admin
+  employee
+  manager
+  tenant_admin
+  platform_support
+  platform_super_admin
+}
+
+enum CaptureMode {
+  visitor
+  exhibitor
+  quick_capture
+  legacy
+}
+
+enum LeadQualifier {
+  hot
+  warm
+  cold
+}
+
+enum SessionStatus {
+  active
+  closed
+  archived
+}
+
+enum OcrStatus {
+  pending
+  processing
+  completed
+  failed
+  manual_fallback
+}
+
+enum ExportStatus {
+  pending
+  processing
+  ready
+  failed
+  expired
+}
+
+enum SyncStatus {
+  pending
+  processing
+  synced
+  conflict
+  dead_letter
+}
+
+enum CardImageStatus {
+  pending
+  confirmed
+  processing
+  ready
+  failed
+}
+
+model Plan {
+  id              String         @id @default(uuid()) @db.Uuid
+  code            String         @unique
+  name            String
+  priceInr        Int            @default(0) @map("price_inr")
+  billingInterval String?        @map("billing_interval")
+  description     String?
+  isActive        Boolean        @default(true) @map("is_active")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  organizations   Organization[] @relation("OrganizationPlan")
+
+  @@map("plans")
+}
+
+model Organization {
+  id                   String    @id @default(uuid()) @db.Uuid
+  name                 String
+  slug                 String    @unique
+  plan                 String    @default("free")
+  settings             Json      @default("{}")
+  maxUsers             Int       @default(50) @map("max_users")
+  storageQuotaGb       Int       @default(10) @map("storage_quota_gb")
+  isActive             Boolean   @default(true) @map("is_active")
+  stripeCustomerId     String?   @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?   @map("stripe_subscription_id")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
+
+  planDetails         Plan      @relation("OrganizationPlan", fields: [plan], references: [code])
+  users               User[]
+  contacts            Contact[]
+  contactEncounters   ContactEncounter[]
+  sessionMembers      SessionMember[]
+  eventSessions       EventSession[]
+  ocrJobs             OcrJob[]
+  cardImages          CardImage[]
+  auditEvents         AuditEvent[]
+  exports             Export[]
+  syncQueues          SyncQueue[]
+  notifications       Notification[]
+  relationshipMatches RelationshipMatch[]
+  mergeHistories      ContactMergeHistory[]
+  rolePermissions     RolePermission[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  supabaseUid    String?   @unique @map("supabase_uid") @db.Uuid
+  email          String    @unique
+  fullName       String?   @map("full_name")
+  passwordHash   String?   @map("password_hash")
+  role           UserRole  @default(user)
+  isActive       Boolean   @default(true) @map("is_active")
+  lastActiveAt   DateTime? @map("last_active_at")
+  expoPushToken  String?   @map("expo_push_token")
+  invitedById    String?   @map("invited_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation("UserInvites", fields: [invitedById], references: [id])
+  invitees     User[]       @relation("UserInvites")
+
+  contactsCreated     Contact[]            @relation("ContactCreator")
+  sessionsCreated     EventSession[]       @relation("SessionCreator")
+  sessionMembers      SessionMember[]
+  encountersCaptured  ContactEncounter[]   @relation("EncounterCapturer")
+  ocrSubmitted        OcrJob[]             @relation("OcrSubmitter")
+  imagesUploaded      CardImage[]
+  exportsRequested    Export[]
+  syncQueues          SyncQueue[]
+  notifications       Notification[]
+  auditEvents         AuditEvent[]
+  mergesPerformed     ContactMergeHistory[] @relation("MergePerformer")
+  mergesReversed      ContactMergeHistory[] @relation("MergeReverser")
+  relationshipDecided RelationshipMatch[]  @relation("RelationshipDecider")
+  authRefreshSessions AuthRefreshSession[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model AuthRefreshSession {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  refreshJti String   @unique @map("refresh_jti") @db.Uuid
+  parentJti  String?  @map("parent_jti") @db.Uuid
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_refresh_sessions")
+}
+
+model RevokedToken {
+  jti       String   @id @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("revoked_tokens")
+}
+
+model Contact {
+  id              String         @id @default(uuid()) @db.Uuid
+  organizationId  String         @map("organization_id") @db.Uuid
+  createdById     String         @map("created_by") @db.Uuid
+  fullName        String         @map("full_name")
+  company         String?
+  title           String?
+  emails          String[]       @default([])
+  phones          String[]       @default([])
+  website         String?
+  address         String?
+  linkedinUrl     String?        @map("linkedin_url")
+  notes           String?
+  tags            String[]       @default([])
+  captureMode     CaptureMode?   @default(legacy) @map("capture_mode")
+  eventSessionId  String?        @map("event_session_id") @db.Uuid
+  encounterType   String?        @map("encounter_type")
+  leadQualifier   LeadQualifier? @map("lead_qualifier")
+  leadNote        String?        @map("lead_note")
+  followUpDate    DateTime?      @map("follow_up_date") @db.Date
+  cardImageId     String?        @map("card_image_id") @db.Uuid
+  ocrConfidence   Decimal?       @map("ocr_confidence") @db.Decimal(4, 3)
+  isMerged        Boolean        @default(false) @map("is_merged")
+  mergedIntoId    String?        @map("merged_into_id") @db.Uuid
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  deletedAt       DateTime?      @map("deleted_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  createdBy     User          @relation("ContactCreator", fields: [createdById], references: [id])
+  eventSession  EventSession? @relation(fields: [eventSessionId], references: [id])
+  cardImage     CardImage?    @relation(fields: [cardImageId], references: [id])
+  mergedInto    Contact?      @relation("ContactMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom    Contact[]     @relation("ContactMerge")
+  encounters    ContactEncounter[]
+  ocrJobs       OcrJob[]
+  cardImages    CardImage[]   @relation("ContactCardImages")
+
+  @@index([organizationId])
+  @@index([organizationId, captureMode])
+  @@index([eventSessionId])
+  @@index([eventSessionId, leadQualifier])
+  @@map("contacts")
+}
+
+model ContactEncounter {
+  id                   String         @id @default(uuid()) @db.Uuid
+  contactId            String         @map("contact_id") @db.Uuid
+  organizationId       String         @map("organization_id") @db.Uuid
+  sessionId            String?        @map("session_id") @db.Uuid
+  capturedById         String         @map("captured_by") @db.Uuid
+  captureMode          CaptureMode    @map("capture_mode")
+  encounterType        String?        @map("encounter_type")
+  encounterLabel       String?        @map("encounter_label")
+  leadQualifier        LeadQualifier? @map("lead_qualifier")
+  leadNote             String?        @map("lead_note")
+  followUpDate         DateTime?      @map("follow_up_date") @db.Date
+  notes                String?
+  cardImageId          String?        @map("card_image_id") @db.Uuid
+  ocrJobId             String?        @map("ocr_job_id") @db.Uuid
+  clientIdempotencyKey String?        @unique @map("client_idempotency_key") @db.Uuid
+  createdAt            DateTime       @default(now()) @map("created_at")
+
+  contact      Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  session      EventSession? @relation(fields: [sessionId], references: [id])
+  capturedBy   User          @relation("EncounterCapturer", fields: [capturedById], references: [id])
+  cardImage    CardImage?    @relation(fields: [cardImageId], references: [id])
+  ocrJob       OcrJob?       @relation(fields: [ocrJobId], references: [id])
+
+  @@index([contactId, createdAt(sort: Desc)])
+  @@index([sessionId])
+  @@map("contact_encounters")
+}
+
+model EventSession {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  createdById    String        @map("created_by") @db.Uuid
+  name           String
+  mode           CaptureMode
+  eventType      String?       @map("event_type")
+  location       String?
+  startDate      DateTime      @default(now()) @map("start_date") @db.Date
+  endDate        DateTime?     @map("end_date") @db.Date
+  status         SessionStatus @default(active)
+  scanCount      Int           @default(0) @map("scan_count")
+  hotCount       Int           @default(0) @map("hot_count")
+  warmCount      Int           @default(0) @map("warm_count")
+  coldCount      Int           @default(0) @map("cold_count")
+  settings       Json          @default("{}")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  deletedAt      DateTime?     @map("deleted_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  createdBy    User               @relation("SessionCreator", fields: [createdById], references: [id])
+  members      SessionMember[]
+  contacts     Contact[]
+  encounters   ContactEncounter[]
+  ocrJobs      OcrJob[]
+  exports      Export[]
+
+  @@index([organizationId, status])
+  @@map("event_sessions")
+}
+
+model SessionMember {
+  id             String   @id @default(uuid()) @db.Uuid
+  sessionId      String   @map("session_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  joinedAt       DateTime @default(now()) @map("joined_at")
+
+  session      EventSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@map("session_members")
+}
+
+model OcrJob {
+  id                   String      @id @default(uuid()) @db.Uuid
+  organizationId       String      @map("organization_id") @db.Uuid
+  contactId            String?     @map("contact_id") @db.Uuid
+  cardImageId          String      @map("card_image_id") @db.Uuid
+  sessionId            String?     @map("session_id") @db.Uuid
+  captureMode          CaptureMode? @map("capture_mode")
+  submittedById        String      @map("submitted_by") @db.Uuid
+  status               OcrStatus   @default(pending)
+  rawText              String?     @map("raw_text")
+  extractedFields      Json        @default("{}") @map("extracted_fields")
+  confidenceScores     Json        @default("{}") @map("confidence_scores")
+  meanConfidence       Decimal?    @map("mean_confidence") @db.Decimal(4, 3)
+  ocrProvider          String?     @map("ocr_provider")
+  processingTimeMs     Int?        @map("processing_time_ms")
+  retryCount           Int         @default(0) @map("retry_count")
+  errorMessage         String?     @map("error_message")
+  clientIdempotencyKey String      @unique @map("client_idempotency_key") @db.Uuid
+  processedAt          DateTime?   @map("processed_at")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  contact      Contact?           @relation(fields: [contactId], references: [id])
+  cardImage    CardImage          @relation(fields: [cardImageId], references: [id])
+  session      EventSession?      @relation(fields: [sessionId], references: [id])
+  submittedBy  User               @relation("OcrSubmitter", fields: [submittedById], references: [id])
+  encounters   ContactEncounter[]
+
+  @@index([organizationId, status, createdAt])
+  @@map("ocr_jobs")
+}
+
+model CardImage {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  contactId      String?         @map("contact_id") @db.Uuid
+  uploadedById   String          @map("uploaded_by") @db.Uuid
+  storagePath    String          @map("storage_path")
+  thumbnailPath  String?         @map("thumbnail_path")
+  fileSizeBytes  Int             @map("file_size_bytes")
+  mimeType       String          @default("image/jpeg") @map("mime_type")
+  widthPx        Int?            @map("width_px")
+  heightPx       Int?            @map("height_px")
+  status         CardImageStatus @default(pending)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  contact      Contact?           @relation("ContactCardImages", fields: [contactId], references: [id])
+  uploadedBy   User               @relation(fields: [uploadedById], references: [id])
+  ocrJobs      OcrJob[]
+  contacts     Contact[]
+  encounters   ContactEncounter[]
+
+  @@map("card_images")
+}
+
+model AuditEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  actorId        String?   @map("actor_id") @db.Uuid
+  actorRole      UserRole? @map("actor_role")
+  eventType      String    @map("event_type")
+  entityType     String    @map("entity_type")
+  entityId       String?   @map("entity_id") @db.Uuid
+  eventData      Json      @default("{}") @map("event_data")
+  ipAddress      String?   @map("ip_address")
+  userAgent      String?   @map("user_agent")
+  correlationId  String?   @map("correlation_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  actor        User?         @relation(fields: [actorId], references: [id])
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("audit_events")
+}
+
+model Export {
+  id                  String       @id @default(uuid()) @db.Uuid
+  organizationId      String       @map("organization_id") @db.Uuid
+  requestedById       String       @map("requested_by") @db.Uuid
+  exportType          String       @map("export_type")
+  sessionId           String?      @map("session_id") @db.Uuid
+  filterCriteria      Json         @default("{}") @map("filter_criteria")
+  status              ExportStatus @default(pending)
+  recordCount         Int?         @map("record_count")
+  storagePath         String?      @map("storage_path")
+  signedUrl           String?      @map("signed_url")
+  signedUrlExpiresAt  DateTime?    @map("signed_url_expires_at")
+  errorMessage        String?      @map("error_message")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  requestedBy  User          @relation(fields: [requestedById], references: [id])
+  session      EventSession? @relation(fields: [sessionId], references: [id])
+
+  @@map("exports")
+}
+
+model SyncQueue {
+  id                   String     @id @default(uuid()) @db.Uuid
+  organizationId       String     @map("organization_id") @db.Uuid
+  userId               String     @map("user_id") @db.Uuid
+  clientIdempotencyKey String     @unique @map("client_idempotency_key") @db.Uuid
+  status               SyncStatus @default(pending)
+  payload              Json
+  archivedPayload      Json?      @map("archived_payload")
+  retryCount           Int        @default(0) @map("retry_count")
+  lastError            String?    @map("last_error")
+  syncedAt             DateTime?  @map("synced_at")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@map("sync_queue")
+}
+
+model Notification {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  type           String
+  title          String
+  body           String
+  entityType     String?   @map("entity_type")
+  entityId       String?   @map("entity_id") @db.Uuid
+  isRead         Boolean   @default(false) @map("is_read")
+  scheduledFor   DateTime? @map("scheduled_for")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model RelationshipMatch {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  incomingOcrJobId  String    @map("incoming_ocr_job_id") @db.Uuid
+  matchedContactId  String    @map("matched_contact_id") @db.Uuid
+  matchConfidence   Decimal   @map("match_confidence") @db.Decimal(4, 3)
+  matchSignals      Json      @default("{}") @map("match_signals")
+  userDecision      String?   @map("user_decision")
+  decidedById       String?   @map("decided_by") @db.Uuid
+  decidedAt         DateTime? @map("decided_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  decidedBy      User?        @relation("RelationshipDecider", fields: [decidedById], references: [id])
+
+  @@map("relationship_matches")
+}
+
+model ContactMergeHistory {
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  sourceContactId  String   @map("source_contact_id") @db.Uuid
+  targetContactId  String   @map("target_contact_id") @db.Uuid
+  sourceSnapshot   Json     @map("source_snapshot")
+  mergedById       String   @map("merged_by") @db.Uuid
+  mergeReason      String?  @map("merge_reason")
+  isReversed       Boolean  @default(false) @map("is_reversed")
+  reversedById     String?  @map("reversed_by") @db.Uuid
+  reversedAt       DateTime? @map("reversed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  mergedBy     User         @relation("MergePerformer", fields: [mergedById], references: [id])
+  reversedBy   User?        @relation("MergeReverser", fields: [reversedById], references: [id])
+
+  @@map("contact_merge_history")
+}
+
+model RolePermission {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  role           UserRole
+  resource       String
+  action         String
+  allowed        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, role, resource, action])
+  @@map("role_permissions")
+}

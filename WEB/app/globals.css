@@ -1,0 +1,88 @@
+@import '../styles/tokens.css';
+
+:root {
+  --font-sans-fallback: system-ui, -apple-system, sans-serif;
+  --font-mono-fallback: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply rounded-xl border border-white/20 bg-white/10 shadow-glass backdrop-blur-xl;
+  }
+
+  .login-gradient {
+    background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 45%, #1e40af 100%);
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--color-shimmer-base) 0%,
+      var(--color-shimmer-highlight) 50%,
+      var(--color-shimmer-base) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes progress-bar-stripes {
+  from {
+    background-position: 1rem 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+.animate-progress-stripes {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 1rem 1rem;
+  animation: progress-bar-stripes 1s linear infinite;
+}
+
+@keyframes progress {
+  0% { width: 20% }
+  50% { width: 75% }
+  100% { width: 20% }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-toast-in {
+  animation: toast-in 200ms ease-out forwards;
+}
+
+
