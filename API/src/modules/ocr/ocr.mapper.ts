@@ -66,7 +66,6 @@ export interface RelationshipMatchDto {
 
 export interface OcrJobDto {
   id: string;
-  organizationId: string;
   contactId: string | null;
   cardImageId: string;
   sessionId: string | null;
@@ -101,7 +100,6 @@ export function toOcrJobDto(job: JobWithMatches): OcrJobDto {
 
   return {
     id: job.id,
-    organizationId: job.organizationId,
     contactId: job.contactId,
     cardImageId: job.cardImageId,
     sessionId: job.sessionId,

@@ -55,7 +55,7 @@ type CreateUserFormState = {
   fullName: string;
   role: UserRole;
   password: string;
-  organizationId: string;
+  password: string;
 };
 
 type EditUserFormState = {
@@ -68,15 +68,7 @@ function UsersContent() {
   const currentUser = useAuthStore((s) => s.user);
   const isSuperAdmin = isPlatformSuperAdmin(currentUser?.role);
 
-  const searchParams = useSearchParams();
-  const initialOrgId =
-    searchParams.get('orgId') || searchParams.get('organizationId') || '';
-
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
-  const [selectedOrganizationId, setSelectedOrganizationId] =
-    useState(initialOrgId);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
 
   const limit = 15;
@@ -89,7 +81,6 @@ function UsersContent() {
     fullName: '',
     role: 'employee',
     password: '',
-    organizationId: currentUser?.organizationId ?? '',
   });
   const [createError, setCreateError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<OrgUserRecord | null>(null);
@@ -112,9 +103,6 @@ function UsersContent() {
         fullName: createForm.fullName.trim(),
         role: isSuperAdmin ? createForm.role : 'employee',
         password: createForm.password,
-        organizationId: isSuperAdmin
-          ? createForm.organizationId.trim()
-          : undefined,
       });
       setIsCreateOpen(false);
       setCreateForm({
@@ -122,8 +110,6 @@ function UsersContent() {
         fullName: '',
         role: 'employee',
         password: '',
-        organizationId:
-          selectedOrganizationId || currentUser?.organizationId || '',
       });
     } catch (err: unknown) {
       setCreateError(getErrorMessage(err, 'Failed to create user'));
@@ -137,8 +123,6 @@ function UsersContent() {
       fullName: '',
       role: 'employee',
       password: '',
-      organizationId:
-        selectedOrganizationId || currentUser?.organizationId || '',
     });
     setIsCreateOpen(true);
   };
@@ -193,10 +177,6 @@ function UsersContent() {
     page,
     limit,
     q: debouncedQ || undefined,
-    organizationId:
-      isSuperAdmin && selectedOrganizationId
-        ? selectedOrganizationId
-        : undefined,
   });
 
   const totalPages = Math.max(1, Math.ceil((data?.meta.total ?? 0) / limit));

@@ -77,7 +77,6 @@ export interface ApiResponse<T> {
 
 export interface UserProfile {
   id: string;
-  organizationId: string;
   email: string;
   fullName: string | null;
   role: UserRole;
@@ -107,7 +106,6 @@ export interface HealthStatus {
 
 export interface ContactRecord {
   id: string;
-  organizationId: string;
   createdById: string;
   fullName: string;
   company: string | null;
@@ -130,7 +128,6 @@ export interface ContactRecord {
 
 export interface EventSessionRecord {
   id: string;
-  organizationId: string;
   createdById: string;
   name: string;
   mode: CaptureMode;
@@ -149,8 +146,6 @@ export interface EventSessionRecord {
 
 export interface OrgUserRecord {
   id: string;
-  organizationId: string;
-  organizationName?: string | null;
   email: string;
   fullName: string | null;
   role: UserRole;
@@ -200,7 +195,6 @@ export interface DashboardStats {
 
 export interface AuditEventRecord {
   id: string;
-  organizationId: string | null;
   actorId: string | null;
   actorEmail: string | null;
   actorRole: string | null;
@@ -224,7 +218,6 @@ export interface OcrRelationshipMatch {
 
 export interface OcrJobRecord {
   id: string;
-  organizationId: string;
   contactId: string | null;
   cardImageId: string;
   sessionId: string | null;
@@ -242,7 +235,6 @@ export interface OcrJobRecord {
 
 export interface ExportJobRecord {
   id: string;
-  organizationId: string;
   requestedById: string;
   exportType: string;
   sessionId: string | null;

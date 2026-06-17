@@ -21,7 +21,6 @@ describe('AuthService', () => {
 
   const activeUser = {
     id: 'user-1',
-    organizationId: 'org-1',
     email: 'user@test.com',
     fullName: 'Test User',
     role: 'employee' as const,
@@ -35,9 +34,7 @@ describe('AuthService', () => {
       findUnique: jest.Mock;
       update: jest.Mock;
     };
-    organization: {
-      findUnique: jest.Mock;
-    };
+
     authRefreshSession: {
       findUnique: jest.Mock;
       findFirst: jest.Mock;
@@ -51,13 +48,7 @@ describe('AuthService', () => {
       findUnique: jest.fn(),
       update: jest.fn().mockResolvedValue(activeUser),
     },
-    organization: {
-      findUnique: jest.fn().mockResolvedValue({
-        id: 'org-1',
-        isActive: true,
-        deletedAt: null,
-      }),
-    },
+
     authRefreshSession: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),

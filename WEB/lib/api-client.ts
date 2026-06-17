@@ -478,7 +478,6 @@ export async function fetchOrgUsers(
     limit?: number;
     role?: string;
     q?: string;
-    organizationId?: string;
   },
 ): Promise<PaginatedList<OrgUserRecord>> {
   const { data } = await client.get<ApiResponse<OrgUserRecord[]>>('/users', {
@@ -507,7 +506,6 @@ export async function deleteOrgUser(
 
 export async function fetchLeadFunnel(
   client: AxiosInstance,
-  organizationId?: string,
 ): Promise<{ hot: number; warm: number; cold: number; unqualified: number }> {
   const { data } = await client.get<
     ApiResponse<{
@@ -516,27 +514,21 @@ export async function fetchLeadFunnel(
       cold: number;
       unqualified: number;
     }>
-  >('/analytics/lead-funnel', {
-    params: organizationId ? { organizationId } : undefined,
-  });
+  >('/analytics/lead-funnel');
   return data.data;
 }
 
 export async function fetchEncounterTypeAnalytics(
   client: AxiosInstance,
-  organizationId?: string,
 ): Promise<Array<{ encounterType: string | null; count: number }>> {
   const { data } = await client.get<
     ApiResponse<Array<{ encounterType: string | null; count: number }>>
-  >('/analytics/encounter-types', {
-    params: organizationId ? { organizationId } : undefined,
-  });
+  >('/analytics/encounter-types');
   return data.data;
 }
 
 export async function fetchSessionAnalytics(
   client: AxiosInstance,
-  organizationId?: string,
 ): Promise<
   Array<{
     id: string;
@@ -562,9 +554,7 @@ export async function fetchSessionAnalytics(
         coldCount: number;
       }>
     >
-  >('/analytics/sessions', {
-    params: organizationId ? { organizationId } : undefined,
-  });
+  >('/analytics/sessions');
   return data.data;
 }
 

@@ -35,7 +35,6 @@ export class ContactsService {
 
   private orgWhere(user: RequestUser): Prisma.ContactWhereInput {
     return {
-      organizationId: user.organizationId,
       deletedAt: null,
       isMerged: false,
     };
@@ -49,8 +48,7 @@ export class ContactsService {
     try {
       const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM contacts
-        WHERE organization_id = ${user.organizationId}::uuid
-          AND deleted_at IS NULL
+        WHERE deleted_at IS NULL
           AND is_merged = false
           AND to_tsvector(
             'english',
@@ -133,7 +131,7 @@ export class ContactsService {
     });
 
     const contact = await this.prisma.contact.create({
-      data: buildContactCreateData(dto, user.organizationId!, user.id),
+      data: buildContactCreateData(dto, user.id),
     });
 
     await this.audit.logForUser(user, {
@@ -263,7 +261,7 @@ export class ContactsService {
     const merged = await this.prisma.$transaction(async (tx) => {
       await tx.contactMergeHistory.create({
         data: {
-          organization: { connect: { id: user.organizationId } },
+          organization: { connect: { id: '00000000-0000-0000-0000-000000000000' } },
           sourceContactId: source.id,
           targetContactId: target.id,
           sourceSnapshot: source as object,
@@ -313,7 +311,6 @@ export class ContactsService {
     const session = await this.prisma.eventSession.findFirst({
       where: {
         id: sessionId,
-        organizationId: user.organizationId!,
         deletedAt: null,
       },
     });

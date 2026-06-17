@@ -10,7 +10,6 @@ export interface JwtPayload {
 
 export interface RequestUser {
   id: string;
-  organizationId?: string;
   role: UserRole;
   email: string;
   jti: string;

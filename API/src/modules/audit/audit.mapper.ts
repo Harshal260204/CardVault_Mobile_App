@@ -2,7 +2,6 @@ import type { AuditEvent, User } from '@prisma/client';
 
 export interface AuditEventDto {
   id: string;
-  organizationId: string | null;
   actorId: string | null;
   actorEmail: string | null;
   actorRole: string | null;
@@ -19,7 +18,6 @@ type AuditWithActor = AuditEvent & { actor: Pick<User, 'email'> | null };
 export function toAuditEventDto(event: AuditWithActor): AuditEventDto {
   return {
     id: event.id,
-    organizationId: event.organizationId,
     actorId: event.actorId,
     actorEmail: event.actor?.email ?? null,
     actorRole: event.actorRole,

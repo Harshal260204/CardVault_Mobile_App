@@ -18,9 +18,7 @@ export class AuditEventsService {
       query.page,
       query.limit,
     );
-    const where: Prisma.AuditEventWhereInput = {
-      organizationId: user.organizationId,
-    };
+    const where: Prisma.AuditEventWhereInput = {};
 
     if (query.eventType?.trim()) {
       where.eventType = {

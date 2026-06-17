@@ -17,7 +17,6 @@ describe('OcrService', () => {
 
   const user: RequestUser = {
     id: 'user-1',
-    organizationId: 'org-1',
     email: 'employee@test.com',
     role: 'employee',
     jti: 'jti-1',
@@ -25,7 +24,6 @@ describe('OcrService', () => {
 
   const baseJob = {
     id: 'job-1',
-    organizationId: 'org-1',
     contactId: null,
     cardImageId: 'card-1',
     sessionId: null,
@@ -91,7 +89,6 @@ describe('OcrService', () => {
           relationshipMatches: [
             {
               id: 'match-1',
-              organizationId: 'org-1',
               incomingOcrJobId: 'job-2',
               matchedContactId: 'contact-1',
               matchConfidence: new Decimal('0.910'),
@@ -114,7 +111,6 @@ describe('OcrService', () => {
           relationshipMatches: [
             {
               id: 'match-2',
-              organizationId: 'org-1',
               incomingOcrJobId: 'job-3',
               matchedContactId: 'missing-contact',
               matchConfidence: new Decimal('0.800'),
@@ -134,7 +130,6 @@ describe('OcrService', () => {
 
       expect(mockPrisma.ocrJob.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { organizationId: 'org-1' },
           skip: 0,
           take: 20,
           include: { cardImage: true },
@@ -185,7 +180,6 @@ describe('OcrService', () => {
       expect(result.items[0]).toEqual(
         expect.objectContaining({
           id: 'job-1',
-          organizationId: 'org-1',
           status: 'completed',
           primaryEmail: 'jane@acme.com',
           meanConfidence: 0.95,
@@ -204,7 +198,6 @@ describe('OcrService', () => {
         relationshipMatches: [
           {
             id: 'match-1',
-            organizationId: 'org-1',
             incomingOcrJobId: 'job-1',
             matchedContactId: 'contact-1',
             matchConfidence: new Decimal('0.880'),

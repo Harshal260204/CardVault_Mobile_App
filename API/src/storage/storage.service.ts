@@ -37,35 +37,18 @@ export class StorageService {
   }
 
   async assertStorageQuota(
-    organizationId: string,
     fileSizeBytes: number,
   ): Promise<void> {
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
-    if (!org) {
-      return;
-    }
-    const quotaBytes = org.storageQuotaGb * 1024 * 1024 * 1024;
-    const used = await this.prisma.cardImage.aggregate({
-      where: { organizationId },
-      _sum: { fileSizeBytes: true },
-    });
-    const usedBytes = used._sum.fileSizeBytes ?? 0;
-    if (usedBytes + fileSizeBytes > quotaBytes) {
-      throw new OrganizationQuotaExceededException(
-        'Storage quota exceeded for organization',
-      );
-    }
+    // Storage quota logic removed for single tenant consumer app
+    return;
   }
 
   buildPath(opts: {
-    organizationId: string;
     sessionId?: string | null;
     contactId?: string | null;
     filename: string;
   }): string {
-    const parts = [opts.organizationId];
+    const parts = ['global'];
     if (opts.sessionId) {
       parts.push('sessions', opts.sessionId);
     }
@@ -77,14 +60,13 @@ export class StorageService {
   }
 
   async upload(opts: {
-    organizationId: string;
     sessionId?: string | null;
     contactId?: string | null;
     filename: string;
     buffer: Buffer;
     contentType: string;
   }): Promise<StorageUploadResult> {
-    await this.assertStorageQuota(opts.organizationId, opts.buffer.length);
+    await this.assertStorageQuota(opts.buffer.length);
     const storagePath = this.buildPath(opts);
 
     if (this.driver === 'supabase') {
@@ -102,7 +84,7 @@ export class StorageService {
       return { storagePath };
     }
 
-    const dir = orgUploadDir(opts.organizationId);
+    const dir = orgUploadDir();
     const absolutePath = join(dir, opts.filename);
     await mkdir(dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, opts.buffer);

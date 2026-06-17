@@ -65,7 +65,6 @@ export class OcrService {
       const session = await this.prisma.eventSession.findFirst({
         where: {
           id: dto.sessionId,
-          organizationId: user.organizationId!,
           deletedAt: null,
         },
       });
@@ -86,7 +85,6 @@ export class OcrService {
     }
 
     const uploaded = await this.storage.upload({
-      organizationId: user.organizationId!,
       sessionId: dto.sessionId,
       filename,
       buffer,
@@ -102,7 +100,7 @@ export class OcrService {
 
     const cardImage = await this.prisma.cardImage.create({
       data: {
-        organization: { connect: { id: user.organizationId! } },
+        organization: { connect: { id: '00000000-0000-0000-0000-000000000000' } },
         uploadedBy: { connect: { id: user.id } },
         storagePath,
         fileSizeBytes: buffer.length,
@@ -113,7 +111,7 @@ export class OcrService {
 
     const job = await this.prisma.ocrJob.create({
       data: {
-        organization: { connect: { id: user.organizationId! } },
+        organization: { connect: { id: '00000000-0000-0000-0000-000000000000' } },
         cardImage: { connect: { id: cardImage.id } },
         submittedBy: { connect: { id: user.id } },
         session: dto.sessionId ? { connect: { id: dto.sessionId } } : undefined,
@@ -144,7 +142,7 @@ export class OcrService {
 
   async reprocess(user: RequestUser, jobId: string): Promise<OcrJobDto> {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id: jobId, organizationId: user.organizationId! },
+      where: { id: jobId },
       include: { cardImage: true },
     });
     if (!job) {
@@ -159,7 +157,7 @@ export class OcrService {
       },
     });
     const processPath = join(
-      orgUploadDir(job.organizationId),
+      orgUploadDir(),
       basename(job.cardImage.storagePath),
     );
     const queued = await this.jobQueue.enqueueOcr({
@@ -179,7 +177,6 @@ export class OcrService {
       query.limit,
     );
     const where: Prisma.OcrJobWhereInput = {
-      organizationId: user.organizationId!,
     };
 
     if (query.status) {
@@ -210,7 +207,7 @@ export class OcrService {
 
   async getById(user: RequestUser, id: string): Promise<OcrJobDto> {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id, organizationId: user.organizationId! },
+      where: { id },
     });
     if (!job) {
       throw new NotFoundException('OCR job not found');
@@ -220,7 +217,7 @@ export class OcrService {
 
   async confirm(user: RequestUser, jobId: string, dto: ConfirmOcrDto) {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id: jobId, organizationId: user.organizationId! },
+      where: { id: jobId },
     });
     if (!job) {
       throw new NotFoundException('OCR job not found');
@@ -239,7 +236,6 @@ export class OcrService {
       const target = await this.prisma.contact.findFirst({
         where: {
           id: dto.linkToContactId,
-          organizationId: user.organizationId!,
           deletedAt: null,
         },
       });
@@ -300,7 +296,6 @@ export class OcrService {
               encounterType: dto.encounterType,
               leadQualifier: dto.leadQualifier,
             },
-            user.organizationId!,
             user.id,
           ),
           ocrConfidence: job.meanConfidence ?? undefined,
@@ -348,7 +343,7 @@ export class OcrService {
     });
 
     void this.notifications.create({
-      organizationId: user.organizationId!,
+      organizationId: '00000000-0000-0000-0000-000000000000',
       userId: user.id,
       type: 'ocr.confirmed',
       title: 'Contact saved',
@@ -466,7 +461,6 @@ export class OcrService {
 
     const candidates = await this.prisma.contact.findMany({
       where: {
-        organizationId: user.organizationId!,
         deletedAt: null,
         isMerged: false,
         OR: or,

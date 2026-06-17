@@ -12,7 +12,7 @@ export class ImagesService {
 
   async getSignedUrl(user: RequestUser, imageId: string) {
     const image = await this.prisma.cardImage.findFirst({
-      where: { id: imageId, organizationId: user.organizationId },
+      where: { id: imageId },
     });
     if (!image) {
       throw new NotFoundException('Image not found');

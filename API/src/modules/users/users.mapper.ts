@@ -1,7 +1,5 @@
 export interface OrgUserDto {
   id: string;
-  organizationId: string | null;
-  organizationName?: string | null;
   email: string;
   fullName: string | null;
   role: string;
@@ -12,8 +10,6 @@ export interface OrgUserDto {
 
 export function toOrgUserDto(user: {
   id: string;
-  organizationId: string | null;
-  organization?: { name: string } | null;
   email: string;
   fullName: string | null;
   role: string;
@@ -23,8 +19,6 @@ export function toOrgUserDto(user: {
 }): OrgUserDto {
   return {
     id: user.id,
-    organizationId: user.organizationId,
-    organizationName: user.organization?.name ?? null,
     email: user.email,
     fullName: user.fullName,
     role: user.role,

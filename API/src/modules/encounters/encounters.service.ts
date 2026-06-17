@@ -11,7 +11,6 @@ export class EncountersService {
     const contact = await this.prisma.contact.findFirst({
       where: {
         id: contactId,
-        organizationId: user.organizationId,
         deletedAt: null,
       },
     });
@@ -19,7 +18,7 @@ export class EncountersService {
       throw new NotFoundException('Contact not found');
     }
     const items = await this.prisma.contactEncounter.findMany({
-      where: { contactId, organizationId: user.organizationId },
+      where: { contactId },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
@@ -40,7 +39,7 @@ export class EncountersService {
 
   async update(user: RequestUser, id: string, dto: UpdateEncounterDto) {
     const encounter = await this.prisma.contactEncounter.findFirst({
-      where: { id, organizationId: user.organizationId },
+      where: { id },
     });
     if (!encounter) {
       throw new NotFoundException('Encounter not found');

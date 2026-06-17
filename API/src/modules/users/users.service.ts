@@ -35,27 +35,8 @@ export class UsersService {
       deletedAt: null,
     };
 
-    if (
-      user.role === UserRole.platform_super_admin ||
-      user.role === UserRole.platform_support
-    ) {
-      if (query.organizationId) {
-        where.organizationId = query.organizationId;
-      }
-      if (query.role) {
-        where.role = query.role;
-      }
-    } else {
-      where.organizationId = user.organizationId;
-      where.role = {
-        in: [UserRole.employee, UserRole.manager, UserRole.tenant_admin],
-      };
-      if (
-        query.role &&
-        ['employee', 'manager', 'tenant_admin'].includes(query.role)
-      ) {
-        where.role = query.role as UserRole;
-      }
+    if (query.role) {
+      where.role = query.role;
     }
 
     if (query.q?.trim()) {
@@ -72,11 +53,6 @@ export class UsersService {
         skip,
         take,
         orderBy: { createdAt: query.sortOrder ?? 'desc' },
-        include: {
-          organization: {
-            select: { name: true },
-          },
-        },
       }),
       this.prisma.user.count({ where }),
     ]);
@@ -86,29 +62,9 @@ export class UsersService {
 
   async getById(user: RequestUser, id: string): Promise<OrgUserDto> {
     const found = await this.prisma.user.findFirst({
-      where:
-        user.role === UserRole.platform_super_admin ||
-        user.role === UserRole.platform_support
-          ? {
-              id,
-              deletedAt: null,
-            }
-          : {
-              id,
-              organizationId: user.organizationId,
-              role: {
-                in: [
-                  UserRole.employee,
-                  UserRole.manager,
-                  UserRole.tenant_admin,
-                ],
-              },
-              deletedAt: null,
-            },
-      include: {
-        organization: {
-          select: { name: true },
-        },
+      where: {
+        id,
+        deletedAt: null,
       },
     });
     if (!found) {
@@ -126,15 +82,6 @@ export class UsersService {
       where: {
         id,
         deletedAt: null,
-        ...(actor.role === UserRole.platform_super_admin ||
-        actor.role === UserRole.platform_support
-          ? {}
-          : { organizationId: actor.organizationId }),
-      },
-      include: {
-        organization: {
-          select: { name: true },
-        },
       },
     });
     if (!target) {
@@ -160,11 +107,6 @@ export class UsersService {
         role: dto.role,
         isActive: dto.isActive,
       },
-      include: {
-        organization: {
-          select: { name: true },
-        },
-      },
     });
 
     if (dto.isActive === false) {
@@ -174,7 +116,6 @@ export class UsersService {
     }
 
     await this.audit.log({
-      organizationId: updated.organizationId,
       actorId: actor.id,
       actorRole: actor.role,
       eventType: 'user.updated',
@@ -199,14 +140,7 @@ export class UsersService {
       throw new ConflictException('Email already exists');
     }
 
-    let organizationId = actor.organizationId;
-    if (
-      (actor.role === UserRole.platform_super_admin ||
-        actor.role === UserRole.platform_support) &&
-      dto.organizationId
-    ) {
-      organizationId = dto.organizationId;
-    }
+    const organizationId = '00000000-0000-0000-0000-000000000000';
 
     const targetRole = dto.role ?? UserRole.employee;
     if (
@@ -242,15 +176,9 @@ export class UsersService {
         passwordHash,
         isActive: true,
       },
-      include: {
-        organization: {
-          select: { name: true },
-        },
-      },
     });
 
     await this.audit.log({
-      organizationId: newUser.organizationId,
       actorId: actor.id,
       actorRole: actor.role,
       eventType: 'user.created',
@@ -259,7 +187,6 @@ export class UsersService {
       eventData: {
         email: newUser.email,
         role: newUser.role,
-        organizationId: newUser.organizationId,
       },
     });
 
@@ -274,10 +201,6 @@ export class UsersService {
       where: {
         id,
         deletedAt: null,
-        ...(actor.role === UserRole.platform_super_admin ||
-        actor.role === UserRole.platform_support
-          ? {}
-          : { organizationId: actor.organizationId }),
       },
     });
     if (!target) {
@@ -300,7 +223,6 @@ export class UsersService {
     await this.prisma.authRefreshSession.deleteMany({ where: { userId: id } });
 
     await this.audit.log({
-      organizationId: target.organizationId,
       actorId: actor.id,
       actorRole: actor.role,
       eventType: 'user.deleted',

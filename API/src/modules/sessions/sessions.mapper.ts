@@ -2,7 +2,6 @@ import type { EventSession } from '@prisma/client';
 
 export interface EventSessionDto {
   id: string;
-  organizationId: string;
   createdById: string;
   name: string;
   mode: string;
@@ -22,7 +21,6 @@ export interface EventSessionDto {
 export function toSessionDto(session: EventSession): EventSessionDto {
   return {
     id: session.id,
-    organizationId: session.organizationId,
     createdById: session.createdById,
     name: session.name,
     mode: session.mode,

@@ -8,7 +8,7 @@ export function useOrgUsers(params: {
   limit: number;
   q?: string;
   role?: string;
-  organizationId?: string;
+  role?: string;
 }) {
   return useQuery({
     queryKey: queryKeys.users.list(params),
@@ -24,7 +24,6 @@ export function useCreateOrgUser() {
       fullName: string;
       role: string;
       password?: string;
-      organizationId?: string;
     }) => {
       const res = await api.post('/users', payload);
       return res.data.data;
