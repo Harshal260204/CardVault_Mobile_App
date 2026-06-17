@@ -12,7 +12,6 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
 import { ImagesModule } from './modules/images/images.module';
-import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { RequestLogMiddleware } from './common/middleware/request-log.middleware';
 import { AuthModule } from './modules/auth/auth.module';
@@ -39,7 +38,6 @@ import { PrismaModule } from './prisma/prisma.module';
     CommonModule,
     AuthModule,
     HealthModule,
-    OrganizationsModule,
     ContactsModule,
     EncountersModule,
     SessionsModule,
