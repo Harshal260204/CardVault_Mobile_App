@@ -3,7 +3,7 @@ import { UserRole } from '@prisma/client';
 
 import { AnalyticsService } from './analytics.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { PlatformTenantBypass } from '../../common/decorators/platform-tenant-bypass.decorator';
+
 import { Roles } from '../../common/decorators/roles.decorator';
 
 import type { RequestUser } from '../auth/auth.types';
@@ -15,7 +15,7 @@ import type { RequestUser } from '../auth/auth.types';
   UserRole.platform_super_admin,
   UserRole.platform_support,
 )
-@PlatformTenantBypass()
+
 export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 

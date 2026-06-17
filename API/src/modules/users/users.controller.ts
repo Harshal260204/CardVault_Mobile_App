@@ -16,7 +16,7 @@ import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { PlatformTenantBypass } from '../../common/decorators/platform-tenant-bypass.decorator';
+
 import { Roles } from '../../common/decorators/roles.decorator';
 
 import type { RequestUser } from '../auth/auth.types';
@@ -28,7 +28,7 @@ import type { RequestUser } from '../auth/auth.types';
   UserRole.platform_super_admin,
   UserRole.platform_support,
 )
-@PlatformTenantBypass()
+
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

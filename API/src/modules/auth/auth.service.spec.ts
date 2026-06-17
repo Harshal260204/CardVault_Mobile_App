@@ -110,7 +110,6 @@ describe('AuthService', () => {
   function signRefreshToken(jti: string): string {
     const payload: JwtPayload = {
       sub: activeUser.id,
-      org: activeUser.organizationId,
       role: activeUser.role,
       email: activeUser.email,
       jti,
@@ -186,7 +185,6 @@ describe('AuthService', () => {
   it('rejects revoked access tokens during verification', async () => {
     const payload: JwtPayload = {
       sub: activeUser.id,
-      org: activeUser.organizationId,
       role: activeUser.role,
       email: activeUser.email,
       jti: 'blocked-access-jti',

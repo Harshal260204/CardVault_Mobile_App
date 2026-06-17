@@ -63,10 +63,10 @@ export class AuthService {
     );
   }
 
-  private toRequestUser(payload: JwtPayload): RequestUser {
+  private toRequestUser(payload: JwtPayload, organizationId?: string | null): RequestUser {
     return {
       id: payload.sub,
-      organizationId: payload.org || undefined,
+      organizationId: organizationId || undefined,
       role: payload.role,
       email: payload.email,
       jti: payload.jti,
@@ -83,7 +83,6 @@ export class AuthService {
     const expiresIn = this.accessTtlSeconds;
     const payload: JwtPayload = {
       sub: user.id,
-      org: user.organizationId ?? undefined,
       role: user.role,
       email: user.email,
       jti,
@@ -106,7 +105,6 @@ export class AuthService {
     const jti = randomUUID();
     const payload: JwtPayload = {
       sub: user.id,
-      org: user.organizationId ?? undefined,
       role: user.role,
       email: user.email,
       jti,
@@ -132,7 +130,11 @@ export class AuthService {
       if (await this.redis.isBlocklisted(payload.jti)) {
         throw new UnauthorizedException('Token revoked');
       }
-      return this.toRequestUser(payload);
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { organizationId: true },
+      });
+      return this.toRequestUser(payload, dbUser?.organizationId);
     } catch (e) {
       this.logger.error('verifyAccessToken error details:', e);
       if (e instanceof UnauthorizedException) {

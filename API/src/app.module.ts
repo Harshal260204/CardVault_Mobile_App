@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { CommonModule } from './common/common.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
+
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { QueueModule } from './queue/queue.module';
 import { RedisModule } from './redis/redis.module';
@@ -51,10 +51,7 @@ import { PrismaModule } from './prisma/prisma.module';
     NotificationsModule,
   ],
   providers: [
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: TenantContextInterceptor,
-    },
+
     {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
