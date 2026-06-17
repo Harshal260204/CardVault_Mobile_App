@@ -382,7 +382,7 @@ function UsersContent() {
                 description={
                   isSuperAdmin
                     ? 'Create a user to assign them to organizations.'
-                    : 'Invite your first salesperson to start scanning cards.'
+                    : 'Create your first salesperson to start scanning cards.'
                 }
                 actionLabel="Add User"
                 onAction={openCreateModal}
