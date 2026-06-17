@@ -14,7 +14,6 @@ import type {
   ExportJobRecord,
   HealthStatus,
   LoginResponse,
-  OrganizationRecord,
   OcrJobRecord,
   OrgUserRecord,
   PaginatedList,
@@ -505,68 +504,6 @@ export async function deleteOrgUser(
   return data.data;
 }
 
-export interface CreateOrganizationPayload {
-  name: string;
-  slug: string;
-  plan?: string;
-  maxUsers?: number;
-  storageQuotaGb?: number;
-  managerEmail?: string;
-  managerPassword?: string;
-  managerName?: string;
-}
-
-export interface UpdateOrganizationPayload {
-  name?: string;
-  slug?: string;
-  plan?: string;
-  maxUsers?: number;
-  storageQuotaGb?: number;
-  isActive?: boolean;
-}
-
-export async function fetchOrganizations(
-  client: AxiosInstance,
-): Promise<OrganizationRecord[]> {
-  const { data } = await client.get<ApiResponse<OrganizationRecord[]>>(
-    '/admin/organizations',
-  );
-  return data.data;
-}
-
-
-export async function createOrganization(
-  client: AxiosInstance,
-  payload: CreateOrganizationPayload,
-): Promise<OrganizationRecord> {
-  const { data } = await client.post<ApiResponse<OrganizationRecord>>(
-    '/admin/organizations',
-    payload,
-  );
-  return data.data;
-}
-
-export async function updateOrganization(
-  client: AxiosInstance,
-  id: string,
-  payload: UpdateOrganizationPayload,
-): Promise<OrganizationRecord> {
-  const { data } = await client.patch<ApiResponse<OrganizationRecord>>(
-    `/admin/organizations/${id}`,
-    payload,
-  );
-  return data.data;
-}
-
-export async function deleteOrganization(
-  client: AxiosInstance,
-  id: string,
-): Promise<{ id: string; deleted: true }> {
-  const { data } = await client.delete<
-    ApiResponse<{ id: string; deleted: true }>
-  >(`/admin/organizations/${id}`);
-  return data.data;
-}
 
 export async function fetchLeadFunnel(
   client: AxiosInstance,

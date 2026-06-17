@@ -4,15 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import {
-  createOrganization,
   createExportJob,
-  deleteOrganization,
   deleteOrgUser,
   fetchAuditEvents,
   fetchDashboard,
   fetchExports,
-  fetchOrganizations,
-  updateOrganization,
   updateOrgUser,
 } from '@/lib/api-client';
 import { queryKeys } from '@/lib/query-keys';
@@ -54,13 +50,7 @@ export function useExports(params: { page: number; limit: number }) {
   });
 }
 
-export function useOrganizations(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.admin.organizations,
-    queryFn: () => fetchOrganizations(api),
-    enabled,
-  });
-}
+
 
 
 
@@ -110,49 +100,3 @@ export function useDeleteOrgUser() {
   });
 }
 
-export function useCreateOrganization() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: createOrganization.bind(null, api),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.organizations,
-      });
-    },
-  });
-}
-
-export function useUpdateOrganization() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      id,
-      ...payload
-    }: {
-      id: string;
-      name?: string;
-      slug?: string;
-      plan?: string;
-      maxUsers?: number;
-      storageQuotaGb?: number;
-      isActive?: boolean;
-    }) => updateOrganization(api, id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.organizations,
-      });
-    },
-  });
-}
-
-export function useDeleteOrganization() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => deleteOrganization(api, id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.admin.organizations,
-      });
-    },
-  });
-}

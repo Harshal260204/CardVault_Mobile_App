@@ -27,8 +27,6 @@ export const queryKeys = {
       ['admin', 'audit', params] as const,
     exports: (params: Record<string, unknown>) =>
       ['admin', 'exports', params] as const,
-    organizations: ['admin', 'organizations'] as const,
-    plans: ['admin', 'plans'] as const,
   },
   analytics: {
     funnel: (organizationId?: string) =>
@@ -38,8 +36,5 @@ export const queryKeys = {
     sessions: (organizationId?: string) =>
       ['analytics', 'sessions', organizationId ?? 'self'] as const,
     platform: ['analytics', 'platform'] as const,
-  },
-  billing: {
-    subscription: ['billing', 'subscription'] as const,
   },
 };
