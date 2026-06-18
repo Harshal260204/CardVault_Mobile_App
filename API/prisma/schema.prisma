@@ -12,6 +12,11 @@ datasource db {
 enum UserRole {
   user
   super_admin
+  employee
+  manager
+  tenant_admin
+  platform_support
+  platform_super_admin
 }
 
 enum CaptureMode {
@@ -160,6 +165,9 @@ model Contact {
 
   @@index([eventSessionId])
   @@index([eventSessionId, leadQualifier])
+  @@index([createdById])
+  @@index([cardImageId])
+  @@index([mergedIntoId])
   @@map("contacts")
 }
 
@@ -188,6 +196,9 @@ model ContactEncounter {
 
   @@index([contactId, createdAt(sort: Desc)])
   @@index([sessionId])
+  @@index([capturedById])
+  @@index([cardImageId])
+  @@index([ocrJobId])
   @@map("contact_encounters")
 }
 
@@ -218,6 +229,7 @@ model EventSession {
   exports      Export[]
 
   @@index([status])
+  @@index([createdById])
   @@map("event_sessions")
 }
 
@@ -231,6 +243,7 @@ model SessionMember {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, userId])
+  @@index([userId])
   @@map("session_members")
 }
 
@@ -262,6 +275,10 @@ model OcrJob {
   encounters   ContactEncounter[]
 
   @@index([status, createdAt])
+  @@index([submittedById])
+  @@index([contactId])
+  @@index([cardImageId])
+  @@index([sessionId])
   @@map("ocr_jobs")
 }
 
@@ -285,6 +302,8 @@ model CardImage {
   contacts     Contact[]
   encounters   ContactEncounter[]
 
+  @@index([uploadedById])
+  @@index([contactId])
   @@map("card_images")
 }
 
@@ -325,6 +344,8 @@ model Export {
   requestedBy  User          @relation(fields: [requestedById], references: [id])
   session      EventSession? @relation(fields: [sessionId], references: [id])
 
+  @@index([requestedById])
+  @@index([sessionId])
   @@map("exports")
 }
 
@@ -376,6 +397,9 @@ model RelationshipMatch {
 
   decidedBy      User?        @relation("RelationshipDecider", fields: [decidedById], references: [id])
 
+  @@index([incomingOcrJobId])
+  @@index([matchedContactId])
+  @@index([decidedById])
   @@map("relationship_matches")
 }
 
@@ -394,6 +418,10 @@ model ContactMergeHistory {
   mergedBy     User         @relation("MergePerformer", fields: [mergedById], references: [id])
   reversedBy   User?        @relation("MergeReverser", fields: [reversedById], references: [id])
 
+  @@index([sourceContactId])
+  @@index([targetContactId])
+  @@index([mergedById])
+  @@index([reversedById])
   @@map("contact_merge_history")
 }
 

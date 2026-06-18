@@ -202,7 +202,7 @@ export class OcrService {
       this.prisma.ocrJob.count({ where }),
     ]);
 
-    const enriched = await Promise.all(items.map((job) => this.enrichJob(job)));
+    const enriched = await this.enrichJobs(items);
 
     return toPaginatedResult(enriched, total, page, limit);
   }
@@ -215,7 +215,8 @@ export class OcrService {
     if (!job) {
       throw new NotFoundException('OCR job not found');
     }
-    return this.enrichJob(job);
+    const enriched = await this.enrichJobs([job]);
+    return enriched[0];
   }
 
   async confirm(user: RequestUser, jobId: string, dto: ConfirmOcrDto) {
@@ -361,13 +362,17 @@ export class OcrService {
     };
   }
 
-  private async enrichJob(
-    job: Prisma.OcrJobGetPayload<object>,
-  ): Promise<OcrJobDto> {
+  private async enrichJobs(
+    jobs: Prisma.OcrJobGetPayload<object>[],
+  ): Promise<OcrJobDto[]> {
+    if (!jobs.length) return [];
+    
+    const jobIds = jobs.map((j) => j.id);
     const matches = await this.prisma.relationshipMatch.findMany({
-      where: { incomingOcrJobId: job.id },
+      where: { incomingOcrJobId: { in: jobIds } },
     });
-    const contactIds = (matches || []).map((m) => m.matchedContactId);
+    
+    const contactIds = Array.from(new Set(matches.map((m) => m.matchedContactId)));
     const contacts = contactIds.length
       ? await this.prisma.contact.findMany({
           where: { id: { in: contactIds } },
@@ -376,12 +381,15 @@ export class OcrService {
       : [];
     const contactMap = new Map(contacts.map((c) => [c.id, c]));
 
-    return toOcrJobDto({
-      ...job,
-      matches: (matches || []).map((m) => ({
-        ...m,
-        matchedContact: contactMap.get(m.matchedContactId) ?? null,
-      })),
+    return jobs.map((job) => {
+      const jobMatches = matches.filter((m) => m.incomingOcrJobId === job.id);
+      return toOcrJobDto({
+        ...job,
+        matches: jobMatches.map((m) => ({
+          ...m,
+          matchedContact: contactMap.get(m.matchedContactId) ?? null,
+        })),
+      });
     });
   }
 

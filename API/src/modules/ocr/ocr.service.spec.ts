@@ -127,37 +127,35 @@ describe('OcrService', () => {
       mockPrisma.ocrJob.count.mockResolvedValue(3);
 
       mockPrisma.relationshipMatch.findMany.mockImplementation(async ({ where }) => {
-        if (where.incomingOcrJobId === 'job-2') {
-          return [
-            {
-              id: 'match-1',
-              incomingOcrJobId: 'job-2',
-              matchedContactId: 'contact-1',
-              matchConfidence: new Decimal('0.910'),
-              matchSignals: { email: true },
-              userDecision: null,
-              decidedById: null,
-              decidedAt: null,
-              createdAt: new Date('2026-06-01T11:30:00.000Z'),
-            }
-          ];
+        const jobs = where.incomingOcrJobId?.in || [where.incomingOcrJobId];
+        const matches = [];
+        if (jobs.includes('job-2')) {
+          matches.push({
+            id: 'match-1',
+            incomingOcrJobId: 'job-2',
+            matchedContactId: 'contact-1',
+            matchConfidence: new Decimal('0.910'),
+            matchSignals: { email: true },
+            userDecision: null,
+            decidedById: null,
+            decidedAt: null,
+            createdAt: new Date('2026-06-01T11:30:00.000Z'),
+          });
         }
-        if (where.incomingOcrJobId === 'job-3') {
-          return [
-            {
-              id: 'match-2',
-              incomingOcrJobId: 'job-3',
-              matchedContactId: 'missing-contact',
-              matchConfidence: new Decimal('0.800'),
-              matchSignals: {},
-              userDecision: 'new',
-              decidedById: 'user-1',
-              decidedAt: new Date('2026-06-01T11:45:00.000Z'),
-              createdAt: new Date('2026-06-01T11:40:00.000Z'),
-            }
-          ];
+        if (jobs.includes('job-3')) {
+          matches.push({
+            id: 'match-2',
+            incomingOcrJobId: 'job-3',
+            matchedContactId: 'missing-contact',
+            matchConfidence: new Decimal('0.800'),
+            matchSignals: {},
+            userDecision: 'new',
+            decidedById: 'user-1',
+            decidedAt: new Date('2026-06-01T11:45:00.000Z'),
+            createdAt: new Date('2026-06-01T11:40:00.000Z'),
+          });
         }
-        return [];
+        return matches;
       });
       mockPrisma.contact.findMany.mockImplementation(async ({ where }) => {
         if (where.id?.in?.includes('contact-1')) {
@@ -176,8 +174,8 @@ describe('OcrService', () => {
           where: expect.objectContaining({ submittedById: user.id }),
         }),
       );
-      // enrichJob is called for each item
-      expect(mockPrisma.relationshipMatch.findMany).toHaveBeenCalled();
+      // enrichJobs is called once for the entire list
+      expect(mockPrisma.relationshipMatch.findMany).toHaveBeenCalledTimes(1);
 
       expect(result.total).toBe(3);
       expect(result.items).toHaveLength(3);
@@ -282,7 +280,7 @@ describe('OcrService', () => {
         }),
       );
       expect(mockPrisma.relationshipMatch.findMany).toHaveBeenCalledWith({
-        where: { incomingOcrJobId: 'job-1' },
+        where: { incomingOcrJobId: { in: ['job-1'] } },
       });
       expect(job.matches).toEqual([
         expect.objectContaining({
