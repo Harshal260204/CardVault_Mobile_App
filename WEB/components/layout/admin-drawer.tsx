@@ -22,7 +22,6 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 
 import { CommandPalette } from '@/components/admin/command-palette';
-
 import { isPlatformSuperAdmin } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -183,8 +182,6 @@ export function AdminDrawer({ children }: { children: ReactNode }) {
   const logout = useAuthStore((s) => s.logout);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
-
-
 
   const segments = pathname.split('/').filter(Boolean);
   const formatSegment = (segment: string) => {
@@ -392,8 +389,6 @@ export function AdminDrawer({ children }: { children: ReactNode }) {
                 </div>
               ))}
             </div>
-
-
 
             {/* Right actions */}
             <div className="flex items-center gap-3">

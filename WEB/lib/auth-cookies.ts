@@ -27,4 +27,3 @@ export function clearAuthCookies(): void {
   document.cookie = `${REFRESH_COOKIE}=; ${expires}`;
   document.cookie = `${ROLE_COOKIE}=; ${expires}`;
 }
-

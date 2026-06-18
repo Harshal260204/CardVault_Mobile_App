@@ -5,10 +5,8 @@ import type { HTMLAttributes } from 'react';
 const variants = {
   default: 'bg-brand-50 text-brand-600 dark:bg-brand-50 dark:text-brand-600',
   accent: 'bg-brand-50 text-brand-600 dark:bg-brand-50 dark:text-brand-600',
-  success:
-    'bg-success-bg text-success-text border border-success-border',
-  warning:
-    'bg-warning-bg text-warning-text border border-warning-border',
+  success: 'bg-success-bg text-success-text border border-success-border',
+  warning: 'bg-warning-bg text-warning-text border border-warning-border',
   error: 'bg-error-bg text-error-text border border-error-border',
   hot: 'bg-[var(--color-qualifier-hot-bg)] text-[var(--color-qualifier-hot-text)] border border-[var(--color-qualifier-hot-border)]',
   warm: 'bg-[var(--color-qualifier-warm-bg)] text-[var(--color-qualifier-warm-text)] border border-[var(--color-qualifier-warm-border)]',

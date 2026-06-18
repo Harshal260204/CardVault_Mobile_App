@@ -8,7 +8,6 @@ import {
   Shield,
   Download,
   BarChart3,
-  Building2,
   CalendarDays,
   CreditCard,
   Sun,
@@ -18,7 +17,6 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 
-import { isPlatformSuperAdmin } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useThemeStore } from '@/stores/theme-store';
@@ -36,7 +34,6 @@ export function CommandPalette() {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const isSuperAdmin = isPlatformSuperAdmin(useAuthStore((s) => s.user?.role));
   const logout = useAuthStore((s) => s.logout);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);

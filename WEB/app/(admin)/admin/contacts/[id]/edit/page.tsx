@@ -11,8 +11,8 @@ import { Input } from '@/components/ui/input';
 import { selectClassName } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useContact, useUpdateContact } from '@/hooks/use-contacts';
-import { cn } from '@/lib/utils';
 import type { LeadQualifier } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 export default function ContactEditPage() {
   const params = useParams<{ id: string }>();
