@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { DuplicateContactDetectedException } from '../../common/exceptions/domain.exceptions';
 import { AuditService } from '../../common/services/audit.service';
 import {
@@ -25,6 +25,7 @@ import {
 import { CreateContactDto } from './dto/create-contact.dto';
 import { ListContactsQueryDto } from './dto/list-contacts-query.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
+import { getOwnershipFilter } from '../../common/utils/ownership.util';
 
 @Injectable()
 export class ContactsService {
@@ -35,6 +36,7 @@ export class ContactsService {
 
   private orgWhere(user: RequestUser): Prisma.ContactWhereInput {
     return {
+      ...getOwnershipFilter(user, 'createdById'),
       deletedAt: null,
       isMerged: false,
     };
@@ -46,10 +48,16 @@ export class ContactsService {
       return [];
     }
     try {
+      const isSuperAdmin = user.role === 'super_admin';
+      const ownershipCondition = isSuperAdmin
+        ? Prisma.sql`1=1`
+        : Prisma.sql`created_by = ${user.id}::uuid`;
+
       const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM contacts
         WHERE deleted_at IS NULL
           AND is_merged = false
+          AND ${ownershipCondition}
           AND to_tsvector(
             'english',
             coalesce(full_name, '') || ' ' ||

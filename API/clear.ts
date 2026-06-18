@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { await prisma.$executeRawUnsafe('TRUNCATE TABLE plans CASCADE;'); await prisma.$executeRawUnsafe('TRUNCATE TABLE organizations CASCADE;'); } main().finally(() => prisma.$disconnect());
