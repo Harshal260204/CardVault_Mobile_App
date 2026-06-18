@@ -11,6 +11,7 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -28,6 +29,18 @@ import { ListOcrQueryDto } from './dto/list-ocr-query.dto';
 import { SubmitOcrDto } from './dto/submit-ocr.dto';
 import { OcrService } from './ocr.service';
 
+export const imageFileFilter = (
+  req: Request,
+  file: Express.Multer.File,
+  cb: (error: Error | null, acceptFile: boolean) => void,
+) => {
+  if (file.mimetype.match(/^image\/(jpeg|png|webp)$/)) {
+    cb(null, true);
+  } else {
+    cb(new BadRequestException('Only image files (jpeg, png, webp) are allowed'), false);
+  }
+};
+
 @Controller('ocr')
 @UseGuards(RateLimitGuard)
 export class OcrController {
@@ -41,6 +54,7 @@ export class OcrController {
     FileInterceptor('image', {
       storage: memoryStorage(),
       limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: imageFileFilter,
     }),
   )
   async submitAlias(
@@ -58,6 +72,7 @@ export class OcrController {
     FileInterceptor('image', {
       storage: memoryStorage(),
       limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: imageFileFilter,
     }),
   )
   async submit(

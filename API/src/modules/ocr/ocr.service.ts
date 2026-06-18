@@ -12,6 +12,7 @@ import {
   resolvePagination,
   toPaginatedResult,
 } from '../../common/utils/pagination';
+import { getOwnershipFilter } from '../../common/utils/ownership.util';
 import {
   DuplicateContactDetectedException,
   SessionClosedException,
@@ -65,6 +66,7 @@ export class OcrService {
       const session = await this.prisma.eventSession.findFirst({
         where: {
           id: dto.sessionId,
+          ...getOwnershipFilter(user, 'createdById'),
           deletedAt: null,
         },
       });
@@ -140,7 +142,7 @@ export class OcrService {
 
   async reprocess(user: RequestUser, jobId: string): Promise<OcrJobDto> {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id: jobId },
+      where: { id: jobId, ...getOwnershipFilter(user, 'submittedById') },
       include: { cardImage: true },
     });
     if (!job) {
@@ -175,6 +177,7 @@ export class OcrService {
       query.limit,
     );
     const where: Prisma.OcrJobWhereInput = {
+      ...getOwnershipFilter(user, 'submittedById'),
     };
 
     if (query.status) {
@@ -193,6 +196,7 @@ export class OcrService {
         where,
         skip,
         take,
+        include: { cardImage: true },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.ocrJob.count({ where }),
@@ -205,7 +209,8 @@ export class OcrService {
 
   async getById(user: RequestUser, id: string): Promise<OcrJobDto> {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id },
+      where: { id, ...getOwnershipFilter(user, 'submittedById') },
+      include: { cardImage: true },
     });
     if (!job) {
       throw new NotFoundException('OCR job not found');
@@ -215,7 +220,7 @@ export class OcrService {
 
   async confirm(user: RequestUser, jobId: string, dto: ConfirmOcrDto) {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id: jobId },
+      where: { id: jobId, ...getOwnershipFilter(user, 'submittedById') },
     });
     if (!job) {
       throw new NotFoundException('OCR job not found');
