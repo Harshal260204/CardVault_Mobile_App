@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import helmet from 'helmet';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { applyDatabaseUrlFromParts, getApiPort } from './config/database-url';
@@ -8,6 +9,22 @@ applyDatabaseUrlFromParts();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
+
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'validator.swagger.io'],
+        connectSrc: ["'self'"],
+      },
+    },
+    frameguard: {
+      action: 'deny',
+    },
+    noSniff: true,
+  }));
 
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(
