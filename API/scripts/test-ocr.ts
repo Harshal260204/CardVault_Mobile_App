@@ -7,16 +7,11 @@
  * Google Vision (default):
  *   OCR_PROVIDER=google
  *   GOOGLE_VISION_KEY_PATH=./credentials/google-vision.json
- *
- * Legacy Paddle (requires ocr_service running):
- *   OCR_PROVIDER=paddle
- *   PADDLE_OCR_URL=http://127.0.0.1:8001
  */
 import 'dotenv/config';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import { GoogleVisionProvider } from '../src/modules/ocr/providers/google-vision.provider';
-import { PaddleOcrProvider } from '../src/modules/ocr/providers/paddle-ocr.provider';
 import { RegexContactParser } from '../src/modules/ocr/parsers/regex.parser';
 import {
   buildConfidenceScores,
@@ -58,29 +53,23 @@ async function main(): Promise<void> {
   const started = Date.now();
   let rawText = '';
 
-  if (providerName === 'paddle') {
-    const paddle = new PaddleOcrProvider();
-    await paddle.onModuleInit();
-    rawText = await paddle.extractText(buffer, name);
-  } else {
-    const vision = new GoogleVisionProvider();
-    await vision.onModuleInit();
-    const extraction = await vision.extractWithMetadata(buffer, name);
-    rawText = extraction.rawText;
-    console.log('\n--- Vision metadata ---');
-    console.log(
-      JSON.stringify(
-        {
-          visionBlockCount: extraction.visionBlockCount ?? 0,
-          visionPageCount: extraction.visionPageCount ?? 0,
-          averageVisionConfidence: extraction.averageVisionConfidence ?? null,
-          processingMs: extraction.processingMs ?? null,
-        },
-        null,
-        2,
-      ),
-    );
-  }
+  const vision = new GoogleVisionProvider();
+  await vision.onModuleInit();
+  const extraction = await vision.extractWithMetadata(buffer, name);
+  rawText = extraction.rawText;
+  console.log('\n--- Vision metadata ---');
+  console.log(
+    JSON.stringify(
+      {
+        visionBlockCount: extraction.visionBlockCount ?? 0,
+        visionPageCount: extraction.visionPageCount ?? 0,
+        averageVisionConfidence: extraction.averageVisionConfidence ?? null,
+        processingMs: extraction.processingMs ?? null,
+      },
+      null,
+      2,
+    ),
+  );
 
   const ocrMs = Date.now() - started;
 

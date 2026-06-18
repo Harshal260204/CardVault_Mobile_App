@@ -55,7 +55,6 @@ type CreateUserFormState = {
   fullName: string;
   role: UserRole;
   password: string;
-  password: string;
 };
 
 type EditUserFormState = {
@@ -68,6 +67,8 @@ function UsersContent() {
   const currentUser = useAuthStore((s) => s.user);
   const isSuperAdmin = isPlatformSuperAdmin(currentUser?.role);
 
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [debouncedQ, setDebouncedQ] = useState('');
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
 

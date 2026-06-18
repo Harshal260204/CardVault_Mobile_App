@@ -29,21 +29,7 @@ export type ExportStatus =
   | 'failed'
   | 'expired';
 
-export type SyncStatus =
-  | 'pending'
-  | 'processing'
-  | 'synced'
-  | 'conflict'
-  | 'dead_letter';
 
-export type EncounterType =
-  | 'flight'
-  | 'b2b'
-  | 'airport'
-  | 'dinner'
-  | 'referral'
-  | 'hallway'
-  | 'other';
 
 
 export interface ApiMeta {

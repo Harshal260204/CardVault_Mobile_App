@@ -1,6 +1,4 @@
 import 'dotenv/config';
-import { initSentry } from './instrument';
-initSentry();
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { applyDatabaseUrlFromParts, getApiPort } from './config/database-url';

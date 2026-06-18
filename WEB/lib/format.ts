@@ -30,14 +30,7 @@ export function formatLeadLabel(
   return qualifier.charAt(0).toUpperCase() + qualifier.slice(1);
 }
 
-export function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
-}
+
 
 /** e.g. "Jun 12, 2024" */
 export function formatDate(iso: string | Date): string {

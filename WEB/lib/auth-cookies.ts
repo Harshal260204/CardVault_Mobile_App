@@ -1,4 +1,3 @@
-import { isUserRole } from '@/lib/roles';
 import type { UserRole } from '@/lib/types';
 
 const ACCESS_COOKIE = 'cardvault_access_token';

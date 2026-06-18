@@ -8,7 +8,6 @@ export function useOrgUsers(params: {
   limit: number;
   q?: string;
   role?: string;
-  role?: string;
 }) {
   return useQuery({
     queryKey: queryKeys.users.list(params),

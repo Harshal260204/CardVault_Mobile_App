@@ -4,11 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import {
-  createContact,
   deleteContact,
   fetchContact,
   fetchContacts,
-  mergeContacts,
   updateContact,
 } from '@/lib/api-client';
 import type { CreateContactPayload } from '@/lib/api-client';
@@ -27,17 +25,6 @@ export function useContact(id: string | null) {
     queryKey: queryKeys.contacts.detail(id ?? ''),
     queryFn: () => fetchContact(api, id!),
     enabled: Boolean(id),
-  });
-}
-
-export function useCreateContact() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: CreateContactPayload) => createContact(api, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions.all });
-    },
   });
 }
 
@@ -65,16 +52,3 @@ export function useDeleteContact() {
   });
 }
 
-export function useMergeContacts(targetId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (sourceContactId: string) =>
-      mergeContacts(api, targetId, sourceContactId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.contacts.detail(targetId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all });
-    },
-  });
-}

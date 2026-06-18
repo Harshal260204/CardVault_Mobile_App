@@ -9,7 +9,6 @@ import { OcrService } from './ocr.service';
 import { OcrProcessingProcessor } from './processors/ocr-processing.processor';
 import { GoogleVisionProvider } from './providers/google-vision.provider';
 import { OcrProviderFactory } from './providers/ocr-provider.factory';
-import { PaddleOcrProvider } from './providers/paddle-ocr.provider';
 import { RegexContactParser } from './parsers/regex.parser';
 
 const queueProcessors = process.env.REDIS_URL?.trim()
@@ -25,7 +24,6 @@ const queueProcessors = process.env.REDIS_URL?.trim()
     OcrExtractionService,
     GoogleVisionProvider,
     OcrProviderFactory,
-    PaddleOcrProvider,
     RegexContactParser,
     DuplicateDetectionService,
     RateLimitGuard,

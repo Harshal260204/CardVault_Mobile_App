@@ -154,10 +154,7 @@ export async function logout(
   });
 }
 
-export async function fetchMe(client: AxiosInstance): Promise<UserProfile> {
-  const { data } = await client.get<ApiResponse<UserProfile>>('/auth/me');
-  return data.data;
-}
+
 
 export async function fetchContacts(
   client: AxiosInstance,

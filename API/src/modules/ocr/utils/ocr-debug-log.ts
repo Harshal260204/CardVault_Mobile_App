@@ -73,13 +73,6 @@ export function logOcrRawText(
   }
 }
 
-/** @deprecated Use logOcrRawText */
-export const logPaddleRawText = (
-  jobId: string,
-  fileName: string,
-  rawText: string,
-  ms: number,
-): void => logOcrRawText('paddle', jobId, fileName, rawText, ms);
 
 /** Log regex parser output (after OCR). */
 export function logParserResult(
@@ -128,13 +121,6 @@ export function logOcrFailure(
   );
 }
 
-/** @deprecated Use logOcrFailure */
-export const logPaddleFailure = (
-  jobId: string,
-  fileName: string,
-  message: string,
-  ms: number,
-): void => logOcrFailure('paddle', jobId, fileName, message, ms);
 
 /** Final job diagnosis for quick grep in API terminal. */
 export function logJobDiagnosis(opts: {

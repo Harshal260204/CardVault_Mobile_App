@@ -33,10 +33,3 @@ export const useToastStore = create<ToastState>((set) => ({
     })),
 }));
 
-export function useToast() {
-  const push = useToastStore((state) => state.push);
-  return {
-    error: (message: string) => push(message, 'error'),
-    success: (message: string) => push(message, 'success'),
-  };
-}
