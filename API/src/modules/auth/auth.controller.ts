@@ -10,7 +10,7 @@ import {
 import type { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { AuthRateLimitGuard } from '../../common/guards/auth-rate-limit.guard';
+
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -42,7 +42,7 @@ export class AuthController {
   }
 
   @Public()
-  @UseGuards(AuthRateLimitGuard)
+
   @Post('register')
   async register(@Body() dto: RegisterDto, @Req() req: AuthRequest) {
     const email = dto.email.trim().toLowerCase();
@@ -67,7 +67,7 @@ export class AuthController {
   }
 
   @Public()
-  @UseGuards(AuthRateLimitGuard)
+
   @Post('login')
   async login(@Body() dto: LoginDto, @Req() req: AuthRequest) {
     const email = dto.email.trim().toLowerCase();

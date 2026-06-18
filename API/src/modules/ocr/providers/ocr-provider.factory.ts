@@ -1,9 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { OcrTextProvider } from '../ocr.types';
 import { GoogleVisionProvider } from './google-vision.provider';
-import { PaddleOcrProvider } from './paddle-ocr.provider';
 
-export type OcrProviderName = 'google' | 'paddle';
+export type OcrProviderName = 'google';
 
 @Injectable()
 export class OcrProviderFactory {
@@ -11,13 +10,12 @@ export class OcrProviderFactory {
 
   constructor(
     private readonly googleVision: GoogleVisionProvider,
-    private readonly paddleOcr: PaddleOcrProvider,
   ) {}
 
   /** Active provider name from OCR_PROVIDER (default: google). */
   getProviderName(): OcrProviderName {
     const name = process.env.OCR_PROVIDER?.trim().toLowerCase() || 'google';
-    if (name === 'paddle') return 'paddle';
+
     if (name !== 'google') {
       this.logger.warn(
         `Unknown OCR_PROVIDER="${name}", falling back to google`,
@@ -29,6 +27,6 @@ export class OcrProviderFactory {
   /** Resolve the active OCR text provider. */
   resolve(): OcrTextProvider {
     const name = this.getProviderName();
-    return name === 'paddle' ? this.paddleOcr : this.googleVision;
+    return this.googleVision;
   }
 }

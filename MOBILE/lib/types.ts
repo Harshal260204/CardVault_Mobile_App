@@ -3,7 +3,9 @@ export type UserRole =
   | 'manager'
   | 'tenant_admin'
   | 'platform_support'
-  | 'platform_super_admin';
+  | 'platform_super_admin'
+  | 'user'
+  | 'super_admin';
 export type CaptureMode = 'visitor' | 'exhibitor' | 'quick_capture' | 'legacy';
 export type LeadQualifier = 'hot' | 'warm' | 'cold';
 export type OcrStatus =
@@ -27,12 +29,10 @@ export interface ApiResponse<T> {
 
 export interface UserProfile {
   id: string;
-  organizationId: string;
   email: string;
   fullName: string | null;
   role: UserRole;
   isActive: boolean;
-  organizationName?: string;
   createdAt?: string;
   cardsScanned?: number;
 }
@@ -50,7 +50,6 @@ export interface LoginResponse {
 
 export interface ContactRecord {
   id: string;
-  organizationId?: string;
   createdById?: string;
   fullName: string;
   company: string | null;
@@ -76,7 +75,6 @@ export interface ContactRecord {
 
 export interface EventSessionRecord {
   id: string;
-  organizationId?: string;
   createdById?: string;
   name: string;
   mode: CaptureMode;

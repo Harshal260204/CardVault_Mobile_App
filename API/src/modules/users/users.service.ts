@@ -13,7 +13,7 @@ import {
 } from '../../common/utils/pagination';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { RequestUser } from '../auth/auth.types';
-import { OrganizationQuotaService } from '../organizations/organization-quota.service';
+
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -24,7 +24,6 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly quotas: OrganizationQuotaService,
   ) {}
 
   async list(user: RequestUser, query: ListUsersQueryDto) {
@@ -36,27 +35,8 @@ export class UsersService {
       deletedAt: null,
     };
 
-    if (
-      user.role === UserRole.platform_super_admin ||
-      user.role === UserRole.platform_support
-    ) {
-      if (query.organizationId) {
-        where.organizationId = query.organizationId;
-      }
-      if (query.role) {
-        where.role = query.role;
-      }
-    } else {
-      where.organizationId = user.organizationId;
-      where.role = {
-        in: [UserRole.employee, UserRole.manager, UserRole.tenant_admin],
-      };
-      if (
-        query.role &&
-        ['employee', 'manager', 'tenant_admin'].includes(query.role)
-      ) {
-        where.role = query.role as UserRole;
-      }
+    if (query.role) {
+      where.role = query.role;
     }
 
     if (query.q?.trim()) {
@@ -73,11 +53,6 @@ export class UsersService {
         skip,
         take,
         orderBy: { createdAt: query.sortOrder ?? 'desc' },
-        include: {
-          organization: {
-            select: { name: true },
-          },
-        },
       }),
       this.prisma.user.count({ where }),
     ]);
@@ -87,29 +62,9 @@ export class UsersService {
 
   async getById(user: RequestUser, id: string): Promise<OrgUserDto> {
     const found = await this.prisma.user.findFirst({
-      where:
-        user.role === UserRole.platform_super_admin ||
-        user.role === UserRole.platform_support
-          ? {
-              id,
-              deletedAt: null,
-            }
-          : {
-              id,
-              organizationId: user.organizationId,
-              role: {
-                in: [
-                  UserRole.employee,
-                  UserRole.manager,
-                  UserRole.tenant_admin,
-                ],
-              },
-              deletedAt: null,
-            },
-      include: {
-        organization: {
-          select: { name: true },
-        },
+      where: {
+        id,
+        deletedAt: null,
       },
     });
     if (!found) {
@@ -127,15 +82,6 @@ export class UsersService {
       where: {
         id,
         deletedAt: null,
-        ...(actor.role === UserRole.platform_super_admin ||
-        actor.role === UserRole.platform_support
-          ? {}
-          : { organizationId: actor.organizationId }),
-      },
-      include: {
-        organization: {
-          select: { name: true },
-        },
       },
     });
     if (!target) {
@@ -152,22 +98,12 @@ export class UsersService {
       throw new ForbiddenException('You cannot deactivate your own account');
     }
 
-    if (dto.isActive === true && !target.isActive) {
-      await this.quotas.assertOrgActive(target.organizationId);
-      await this.quotas.assertCanAddUser(target.organizationId);
-    }
-
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
         fullName: dto.fullName?.trim(),
         role: dto.role,
         isActive: dto.isActive,
-      },
-      include: {
-        organization: {
-          select: { name: true },
-        },
       },
     });
 
@@ -178,7 +114,6 @@ export class UsersService {
     }
 
     await this.audit.log({
-      organizationId: updated.organizationId,
       actorId: actor.id,
       actorRole: actor.role,
       eventType: 'user.updated',
@@ -203,59 +138,24 @@ export class UsersService {
       throw new ConflictException('Email already exists');
     }
 
-    let organizationId = actor.organizationId;
-    if (
-      (actor.role === UserRole.platform_super_admin ||
-        actor.role === UserRole.platform_support) &&
-      dto.organizationId
-    ) {
-      organizationId = dto.organizationId;
+    const targetRole = dto.role ?? UserRole.user;
+    if (actor.role !== UserRole.super_admin && targetRole === UserRole.super_admin) {
+      throw new ForbiddenException('Only super admins can create super admin accounts');
     }
-
-    const targetRole = dto.role ?? UserRole.employee;
-    if (
-      actor.role === UserRole.manager &&
-      targetRole !== UserRole.employee &&
-      targetRole !== UserRole.manager
-    ) {
-      throw new ForbiddenException(
-        'Managers can only create employee or manager accounts',
-      );
-    }
-    if (
-      actor.role !== UserRole.platform_super_admin &&
-      actor.role !== UserRole.platform_support &&
-      (targetRole === UserRole.platform_super_admin ||
-        targetRole === UserRole.platform_support)
-    ) {
-      throw new ForbiddenException(
-        'Only platform admins can create platform accounts',
-      );
-    }
-
-    await this.quotas.assertOrgActive(organizationId);
-    await this.quotas.assertCanAddUser(organizationId);
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
     const newUser = await this.prisma.user.create({
       data: {
-        organizationId,
         email,
         fullName: dto.fullName?.trim() || null,
         role: targetRole,
         passwordHash,
         isActive: true,
       },
-      include: {
-        organization: {
-          select: { name: true },
-        },
-      },
     });
 
     await this.audit.log({
-      organizationId: newUser.organizationId,
       actorId: actor.id,
       actorRole: actor.role,
       eventType: 'user.created',
@@ -264,7 +164,6 @@ export class UsersService {
       eventData: {
         email: newUser.email,
         role: newUser.role,
-        organizationId: newUser.organizationId,
       },
     });
 
@@ -279,10 +178,6 @@ export class UsersService {
       where: {
         id,
         deletedAt: null,
-        ...(actor.role === UserRole.platform_super_admin ||
-        actor.role === UserRole.platform_support
-          ? {}
-          : { organizationId: actor.organizationId }),
       },
     });
     if (!target) {
@@ -305,7 +200,6 @@ export class UsersService {
     await this.prisma.authRefreshSession.deleteMany({ where: { userId: id } });
 
     await this.audit.log({
-      organizationId: target.organizationId,
       actorId: actor.id,
       actorRole: actor.role,
       eventType: 'user.deleted',
@@ -320,74 +214,12 @@ export class UsersService {
     actor: RequestUser,
     targetRole: UserRole,
   ): void {
-    if (actor.role === UserRole.platform_super_admin) return;
-    if (actor.role === UserRole.platform_support) {
-      if (
-        targetRole === UserRole.platform_super_admin ||
-        targetRole === UserRole.platform_support
-      ) {
-        throw new ForbiddenException(
-          'Platform support cannot manage other platform accounts',
-        );
-      }
-      return;
-    }
-    if (actor.role === UserRole.tenant_admin) {
-      if (
-        targetRole === UserRole.platform_super_admin ||
-        targetRole === UserRole.platform_support
-      ) {
-        throw new ForbiddenException(
-          'Tenant admins cannot manage platform accounts',
-        );
-      }
-      return;
-    }
-    if (actor.role === UserRole.manager) {
-      if (targetRole !== UserRole.employee && targetRole !== UserRole.manager) {
-        throw new ForbiddenException(
-          'Managers can only manage employee or manager accounts',
-        );
-      }
-      return;
-    }
+    if (actor.role === UserRole.super_admin) return;
     throw new ForbiddenException('Insufficient permissions');
   }
 
   private assertCanChangeRole(actor: RequestUser, nextRole: string): void {
-    if (actor.role === UserRole.platform_super_admin) return;
-    if (nextRole === UserRole.platform_super_admin) {
-      throw new ForbiddenException(
-        'Only platform super admins can assign the platform super admin role',
-      );
-    }
-    if (actor.role === UserRole.platform_support) {
-      if (nextRole === UserRole.platform_support) {
-        throw new ForbiddenException(
-          'Platform support cannot assign platform roles',
-        );
-      }
-      return;
-    }
-    if (actor.role === UserRole.tenant_admin) {
-      if (
-        nextRole === UserRole.platform_support ||
-        nextRole === UserRole.platform_super_admin
-      ) {
-        throw new ForbiddenException(
-          'Tenant admins cannot assign platform roles',
-        );
-      }
-      return;
-    }
-    if (actor.role === UserRole.manager) {
-      if (nextRole !== UserRole.employee && nextRole !== UserRole.manager) {
-        throw new ForbiddenException(
-          'Managers can only assign employee or manager roles',
-        );
-      }
-      return;
-    }
+    if (actor.role === UserRole.super_admin) return;
     throw new ForbiddenException('Insufficient permissions');
   }
 }

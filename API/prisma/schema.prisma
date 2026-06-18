@@ -12,11 +12,6 @@ datasource db {
 enum UserRole {
   user
   super_admin
-  employee
-  manager
-  tenant_admin
-  platform_support
-  platform_super_admin
 }
 
 enum CaptureMode {
@@ -70,59 +65,10 @@ enum CardImageStatus {
   failed
 }
 
-model Plan {
-  id              String         @id @default(uuid()) @db.Uuid
-  code            String         @unique
-  name            String
-  priceInr        Int            @default(0) @map("price_inr")
-  billingInterval String?        @map("billing_interval")
-  description     String?
-  isActive        Boolean        @default(true) @map("is_active")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  organizations   Organization[] @relation("OrganizationPlan")
-
-  @@map("plans")
-}
-
-model Organization {
-  id                   String    @id @default(uuid()) @db.Uuid
-  name                 String
-  slug                 String    @unique
-  plan                 String    @default("free")
-  settings             Json      @default("{}")
-  maxUsers             Int       @default(50) @map("max_users")
-  storageQuotaGb       Int       @default(10) @map("storage_quota_gb")
-  isActive             Boolean   @default(true) @map("is_active")
-  stripeCustomerId     String?   @unique @map("stripe_customer_id")
-  stripeSubscriptionId String?   @map("stripe_subscription_id")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
-  deletedAt            DateTime? @map("deleted_at")
-
-  planDetails         Plan      @relation("OrganizationPlan", fields: [plan], references: [code])
-  users               User[]
-  contacts            Contact[]
-  contactEncounters   ContactEncounter[]
-  sessionMembers      SessionMember[]
-  eventSessions       EventSession[]
-  ocrJobs             OcrJob[]
-  cardImages          CardImage[]
-  auditEvents         AuditEvent[]
-  exports             Export[]
-  syncQueues          SyncQueue[]
-  notifications       Notification[]
-  relationshipMatches RelationshipMatch[]
-  mergeHistories      ContactMergeHistory[]
-  rolePermissions     RolePermission[]
-
-  @@map("organizations")
-}
 
 model User {
   id             String    @id @default(uuid()) @db.Uuid
-  organizationId String?   @map("organization_id") @db.Uuid
   supabaseUid    String?   @unique @map("supabase_uid") @db.Uuid
   email          String    @unique
   fullName       String?   @map("full_name")
@@ -131,14 +77,10 @@ model User {
   isActive       Boolean   @default(true) @map("is_active")
   lastActiveAt   DateTime? @map("last_active_at")
   expoPushToken  String?   @map("expo_push_token")
-  invitedById    String?   @map("invited_by") @db.Uuid
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invitedBy    User?        @relation("UserInvites", fields: [invitedById], references: [id])
-  invitees     User[]       @relation("UserInvites")
 
   contactsCreated     Contact[]            @relation("ContactCreator")
   sessionsCreated     EventSession[]       @relation("SessionCreator")
@@ -155,7 +97,6 @@ model User {
   relationshipDecided RelationshipMatch[]  @relation("RelationshipDecider")
   authRefreshSessions AuthRefreshSession[]
 
-  @@index([organizationId])
   @@map("users")
 }
 
@@ -183,7 +124,6 @@ model RevokedToken {
 
 model Contact {
   id              String         @id @default(uuid()) @db.Uuid
-  organizationId  String         @map("organization_id") @db.Uuid
   createdById     String         @map("created_by") @db.Uuid
   fullName        String         @map("full_name")
   company         String?
@@ -209,7 +149,6 @@ model Contact {
   updatedAt       DateTime       @updatedAt @map("updated_at")
   deletedAt       DateTime?      @map("deleted_at")
 
-  organization  Organization  @relation(fields: [organizationId], references: [id])
   createdBy     User          @relation("ContactCreator", fields: [createdById], references: [id])
   eventSession  EventSession? @relation(fields: [eventSessionId], references: [id])
   cardImage     CardImage?    @relation(fields: [cardImageId], references: [id])
@@ -219,8 +158,6 @@ model Contact {
   ocrJobs       OcrJob[]
   cardImages    CardImage[]   @relation("ContactCardImages")
 
-  @@index([organizationId])
-  @@index([organizationId, captureMode])
   @@index([eventSessionId])
   @@index([eventSessionId, leadQualifier])
   @@map("contacts")
@@ -229,7 +166,6 @@ model Contact {
 model ContactEncounter {
   id                   String         @id @default(uuid()) @db.Uuid
   contactId            String         @map("contact_id") @db.Uuid
-  organizationId       String         @map("organization_id") @db.Uuid
   sessionId            String?        @map("session_id") @db.Uuid
   capturedById         String         @map("captured_by") @db.Uuid
   captureMode          CaptureMode    @map("capture_mode")
@@ -245,7 +181,6 @@ model ContactEncounter {
   createdAt            DateTime       @default(now()) @map("created_at")
 
   contact      Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  organization Organization  @relation(fields: [organizationId], references: [id])
   session      EventSession? @relation(fields: [sessionId], references: [id])
   capturedBy   User          @relation("EncounterCapturer", fields: [capturedById], references: [id])
   cardImage    CardImage?    @relation(fields: [cardImageId], references: [id])
@@ -258,7 +193,6 @@ model ContactEncounter {
 
 model EventSession {
   id             String        @id @default(uuid()) @db.Uuid
-  organizationId String        @map("organization_id") @db.Uuid
   createdById    String        @map("created_by") @db.Uuid
   name           String
   mode           CaptureMode
@@ -276,7 +210,6 @@ model EventSession {
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
 
-  organization Organization       @relation(fields: [organizationId], references: [id])
   createdBy    User               @relation("SessionCreator", fields: [createdById], references: [id])
   members      SessionMember[]
   contacts     Contact[]
@@ -284,7 +217,7 @@ model EventSession {
   ocrJobs      OcrJob[]
   exports      Export[]
 
-  @@index([organizationId, status])
+  @@index([status])
   @@map("event_sessions")
 }
 
@@ -292,12 +225,10 @@ model SessionMember {
   id             String   @id @default(uuid()) @db.Uuid
   sessionId      String   @map("session_id") @db.Uuid
   userId         String   @map("user_id") @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
   joinedAt       DateTime @default(now()) @map("joined_at")
 
   session      EventSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, userId])
   @@map("session_members")
@@ -305,7 +236,6 @@ model SessionMember {
 
 model OcrJob {
   id                   String      @id @default(uuid()) @db.Uuid
-  organizationId       String      @map("organization_id") @db.Uuid
   contactId            String?     @map("contact_id") @db.Uuid
   cardImageId          String      @map("card_image_id") @db.Uuid
   sessionId            String?     @map("session_id") @db.Uuid
@@ -325,20 +255,18 @@ model OcrJob {
   createdAt            DateTime    @default(now()) @map("created_at")
   updatedAt            DateTime    @updatedAt @map("updated_at")
 
-  organization Organization       @relation(fields: [organizationId], references: [id])
   contact      Contact?           @relation(fields: [contactId], references: [id])
   cardImage    CardImage          @relation(fields: [cardImageId], references: [id])
   session      EventSession?      @relation(fields: [sessionId], references: [id])
   submittedBy  User               @relation("OcrSubmitter", fields: [submittedById], references: [id])
   encounters   ContactEncounter[]
 
-  @@index([organizationId, status, createdAt])
+  @@index([status, createdAt])
   @@map("ocr_jobs")
 }
 
 model CardImage {
   id             String          @id @default(uuid()) @db.Uuid
-  organizationId String          @map("organization_id") @db.Uuid
   contactId      String?         @map("contact_id") @db.Uuid
   uploadedById   String          @map("uploaded_by") @db.Uuid
   storagePath    String          @map("storage_path")
@@ -351,7 +279,6 @@ model CardImage {
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
-  organization Organization       @relation(fields: [organizationId], references: [id])
   contact      Contact?           @relation("ContactCardImages", fields: [contactId], references: [id])
   uploadedBy   User               @relation(fields: [uploadedById], references: [id])
   ocrJobs      OcrJob[]
@@ -363,7 +290,6 @@ model CardImage {
 
 model AuditEvent {
   id             String    @id @default(uuid()) @db.Uuid
-  organizationId String?   @map("organization_id") @db.Uuid
   actorId        String?   @map("actor_id") @db.Uuid
   actorRole      UserRole? @map("actor_role")
   eventType      String    @map("event_type")
@@ -375,16 +301,14 @@ model AuditEvent {
   correlationId  String?   @map("correlation_id") @db.Uuid
   createdAt      DateTime  @default(now()) @map("created_at")
 
-  organization Organization? @relation(fields: [organizationId], references: [id])
   actor        User?         @relation(fields: [actorId], references: [id])
 
-  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
   @@map("audit_events")
 }
 
 model Export {
   id                  String       @id @default(uuid()) @db.Uuid
-  organizationId      String       @map("organization_id") @db.Uuid
   requestedById       String       @map("requested_by") @db.Uuid
   exportType          String       @map("export_type")
   sessionId           String?      @map("session_id") @db.Uuid
@@ -398,7 +322,6 @@ model Export {
   createdAt           DateTime     @default(now()) @map("created_at")
   updatedAt           DateTime     @updatedAt @map("updated_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
   requestedBy  User          @relation(fields: [requestedById], references: [id])
   session      EventSession? @relation(fields: [sessionId], references: [id])
 
@@ -407,7 +330,6 @@ model Export {
 
 model SyncQueue {
   id                   String     @id @default(uuid()) @db.Uuid
-  organizationId       String     @map("organization_id") @db.Uuid
   userId               String     @map("user_id") @db.Uuid
   clientIdempotencyKey String     @unique @map("client_idempotency_key") @db.Uuid
   status               SyncStatus @default(pending)
@@ -419,7 +341,6 @@ model SyncQueue {
   createdAt            DateTime   @default(now()) @map("created_at")
   updatedAt            DateTime   @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
 
   @@map("sync_queue")
@@ -427,7 +348,6 @@ model SyncQueue {
 
 model Notification {
   id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
   userId         String    @map("user_id") @db.Uuid
   type           String
   title          String
@@ -438,7 +358,6 @@ model Notification {
   scheduledFor   DateTime? @map("scheduled_for")
   createdAt      DateTime  @default(now()) @map("created_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
 
   @@map("notifications")
@@ -446,7 +365,6 @@ model Notification {
 
 model RelationshipMatch {
   id                String    @id @default(uuid()) @db.Uuid
-  organizationId    String    @map("organization_id") @db.Uuid
   incomingOcrJobId  String    @map("incoming_ocr_job_id") @db.Uuid
   matchedContactId  String    @map("matched_contact_id") @db.Uuid
   matchConfidence   Decimal   @map("match_confidence") @db.Decimal(4, 3)
@@ -456,7 +374,6 @@ model RelationshipMatch {
   decidedAt         DateTime? @map("decided_at")
   createdAt         DateTime  @default(now()) @map("created_at")
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
   decidedBy      User?        @relation("RelationshipDecider", fields: [decidedById], references: [id])
 
   @@map("relationship_matches")
@@ -464,7 +381,6 @@ model RelationshipMatch {
 
 model ContactMergeHistory {
   id               String   @id @default(uuid()) @db.Uuid
-  organizationId   String   @map("organization_id") @db.Uuid
   sourceContactId  String   @map("source_contact_id") @db.Uuid
   targetContactId  String   @map("target_contact_id") @db.Uuid
   sourceSnapshot   Json     @map("source_snapshot")
@@ -475,24 +391,9 @@ model ContactMergeHistory {
   reversedAt       DateTime? @map("reversed_at")
   createdAt        DateTime @default(now()) @map("created_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id])
   mergedBy     User         @relation("MergePerformer", fields: [mergedById], references: [id])
   reversedBy   User?        @relation("MergeReverser", fields: [reversedById], references: [id])
 
   @@map("contact_merge_history")
 }
 
-model RolePermission {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  role           UserRole
-  resource       String
-  action         String
-  allowed        Boolean  @default(true)
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  @@unique([organizationId, role, resource, action])
-  @@map("role_permissions")
-}

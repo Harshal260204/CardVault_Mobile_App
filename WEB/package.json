@@ -31,7 +31,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@cardvault/eslint-config": "*",
+    "@cardvault/eslint-config": "file:../packages/eslint-config",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^20.17.10",
     "@types/react": "^18.3.18",

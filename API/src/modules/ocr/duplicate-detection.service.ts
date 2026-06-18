@@ -23,7 +23,6 @@ export class DuplicateDetectionService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findCandidates(
-    organizationId: string,
     fields: ExtractedFieldSet,
   ): Promise<DuplicateCandidate[]> {
     const normalizedEmails = normalizeDuplicateEmails(fields.emails);
@@ -49,7 +48,6 @@ export class DuplicateDetectionService {
 
     const contacts = await this.prisma.contact.findMany({
       where: {
-        organizationId,
         deletedAt: null,
         isMerged: false,
         OR: or,

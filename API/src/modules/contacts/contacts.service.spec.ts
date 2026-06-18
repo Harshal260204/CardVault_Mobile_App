@@ -13,8 +13,7 @@ describe('ContactsService', () => {
 
   const user: RequestUser = {
     id: 'user-1',
-    organizationId: 'org-1',
-    role: 'employee',
+    role: 'user',
     email: 'employee@test.com',
     jti: 'jti-1',
   };
@@ -72,7 +71,6 @@ describe('ContactsService', () => {
     mockPrisma.contact.findMany.mockResolvedValue([]);
     mockPrisma.contact.create.mockResolvedValue({
       id: 'contact-new',
-      organizationId: user.organizationId,
       createdById: user.id,
       fullName: 'New Contact',
       company: null,
@@ -112,7 +110,6 @@ describe('ContactsService', () => {
   it('skips duplicate lookup when no email, phone, or name+company pair is provided', async () => {
     mockPrisma.contact.create.mockResolvedValue({
       id: 'contact-minimal',
-      organizationId: user.organizationId,
       createdById: user.id,
       fullName: 'Single Name Only',
       company: null,

@@ -14,11 +14,10 @@ import type {
   ExportJobRecord,
   HealthStatus,
   LoginResponse,
-  OrganizationRecord,
   OcrJobRecord,
   OrgUserRecord,
   PaginatedList,
-  PlanRecord,
+
   UserProfile,
   UserRole,
 } from '@/lib/types';
@@ -128,12 +127,6 @@ export function createApiClient(config: ApiClientConfig): AxiosInstance {
   return client;
 }
 
-export async function healthCheck(
-  client: AxiosInstance,
-): Promise<HealthStatus> {
-  const { data } = await client.get<ApiResponse<HealthStatus>>('/health');
-  return data.data;
-}
 
 export async function login(
   client: AxiosInstance,
@@ -193,15 +186,6 @@ export async function deleteContact(
   return data.data;
 }
 
-export async function fetchSession(
-  client: AxiosInstance,
-  id: string,
-): Promise<EventSessionRecord> {
-  const { data } = await client.get<ApiResponse<EventSessionRecord>>(
-    `/sessions/${id}`,
-  );
-  return data.data;
-}
 
 export async function closeSession(
   client: AxiosInstance,
@@ -213,29 +197,6 @@ export async function closeSession(
   return data.data;
 }
 
-export async function fetchSessionStats(
-  client: AxiosInstance,
-  id: string,
-): Promise<{
-  sessionId: string;
-  scanCount: number;
-  hotCount: number;
-  warmCount: number;
-  coldCount: number;
-  status: string;
-}> {
-  const { data } = await client.get<
-    ApiResponse<{
-      sessionId: string;
-      scanCount: number;
-      hotCount: number;
-      warmCount: number;
-      coldCount: number;
-      status: string;
-    }>
-  >(`/sessions/${id}/stats`);
-  return data.data;
-}
 
 export async function fetchSessions(
   client: AxiosInstance,
@@ -301,83 +262,9 @@ export async function fetchMe(client: AxiosInstance): Promise<UserProfile> {
   return data.data;
 }
 
-export async function submitOcrJob(
-  client: AxiosInstance,
-  file: File,
-  payload: {
-    captureMode: CaptureMode;
-    sessionId?: string;
-    clientIdempotencyKey: string;
-  },
-): Promise<OcrJobRecord> {
-  const form = new FormData();
-  form.append('image', file);
-  form.append('captureMode', payload.captureMode);
-  form.append('clientIdempotencyKey', payload.clientIdempotencyKey);
-  if (payload.sessionId) {
-    form.append('sessionId', payload.sessionId);
-  }
-  const { data } = await client.post<ApiResponse<OcrJobRecord>>(
-    '/ocr/jobs',
-    form,
-    {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    },
-  );
-  return data.data;
-}
 
-export async function fetchOcrJobs(
-  client: AxiosInstance,
-  params?: {
-    page?: number;
-    limit?: number;
-    needsReview?: boolean;
-    status?: string;
-  },
-): Promise<PaginatedList<OcrJobRecord>> {
-  const { data } = await client.get<ApiResponse<OcrJobRecord[]>>('/ocr/jobs', {
-    params,
-  });
-  return {
-    items: data.data,
-    meta: {
-      page: data.meta?.page ?? 1,
-      limit: data.meta?.limit ?? 20,
-      total: data.meta?.total ?? data.data.length,
-    },
-  };
-}
 
-export async function fetchOcrJob(
-  client: AxiosInstance,
-  id: string,
-): Promise<OcrJobRecord> {
-  const { data } = await client.get<ApiResponse<OcrJobRecord>>(
-    `/ocr/jobs/${id}`,
-  );
-  return data.data;
-}
 
-export async function confirmOcrJob(
-  client: AxiosInstance,
-  id: string,
-  payload: {
-    fullName: string;
-    company?: string;
-    title?: string;
-    emails?: string[];
-    phones?: string[];
-    leadQualifier?: string;
-    duplicateAction?: 'new' | 'link';
-    linkToContactId?: string;
-  },
-): Promise<{ job: OcrJobRecord; contact: ContactRecord }> {
-  const { data } = await client.post<
-    ApiResponse<{ job: OcrJobRecord; contact: ContactRecord }>
-  >(`/ocr/jobs/${id}/confirm`, payload);
-  return data.data;
-}
 
 export async function mergeContacts(
   client: AxiosInstance,
@@ -479,7 +366,6 @@ export async function fetchOrgUsers(
     limit?: number;
     role?: string;
     q?: string;
-    organizationId?: string;
   },
 ): Promise<PaginatedList<OrgUserRecord>> {
   const { data } = await client.get<ApiResponse<OrgUserRecord[]>>('/users', {
@@ -505,76 +391,9 @@ export async function deleteOrgUser(
   return data.data;
 }
 
-export interface CreateOrganizationPayload {
-  name: string;
-  slug: string;
-  plan?: string;
-  maxUsers?: number;
-  storageQuotaGb?: number;
-  managerEmail?: string;
-  managerPassword?: string;
-  managerName?: string;
-}
-
-export interface UpdateOrganizationPayload {
-  name?: string;
-  slug?: string;
-  plan?: string;
-  maxUsers?: number;
-  storageQuotaGb?: number;
-  isActive?: boolean;
-}
-
-export async function fetchOrganizations(
-  client: AxiosInstance,
-): Promise<OrganizationRecord[]> {
-  const { data } = await client.get<ApiResponse<OrganizationRecord[]>>(
-    '/admin/organizations',
-  );
-  return data.data;
-}
-
-export async function fetchPlans(client: AxiosInstance): Promise<PlanRecord[]> {
-  const { data } = await client.get<ApiResponse<PlanRecord[]>>('/admin/plans');
-  return data.data;
-}
-
-export async function createOrganization(
-  client: AxiosInstance,
-  payload: CreateOrganizationPayload,
-): Promise<OrganizationRecord> {
-  const { data } = await client.post<ApiResponse<OrganizationRecord>>(
-    '/admin/organizations',
-    payload,
-  );
-  return data.data;
-}
-
-export async function updateOrganization(
-  client: AxiosInstance,
-  id: string,
-  payload: UpdateOrganizationPayload,
-): Promise<OrganizationRecord> {
-  const { data } = await client.patch<ApiResponse<OrganizationRecord>>(
-    `/admin/organizations/${id}`,
-    payload,
-  );
-  return data.data;
-}
-
-export async function deleteOrganization(
-  client: AxiosInstance,
-  id: string,
-): Promise<{ id: string; deleted: true }> {
-  const { data } = await client.delete<
-    ApiResponse<{ id: string; deleted: true }>
-  >(`/admin/organizations/${id}`);
-  return data.data;
-}
 
 export async function fetchLeadFunnel(
   client: AxiosInstance,
-  organizationId?: string,
 ): Promise<{ hot: number; warm: number; cold: number; unqualified: number }> {
   const { data } = await client.get<
     ApiResponse<{
@@ -583,27 +402,21 @@ export async function fetchLeadFunnel(
       cold: number;
       unqualified: number;
     }>
-  >('/analytics/lead-funnel', {
-    params: organizationId ? { organizationId } : undefined,
-  });
+  >('/analytics/lead-funnel');
   return data.data;
 }
 
 export async function fetchEncounterTypeAnalytics(
   client: AxiosInstance,
-  organizationId?: string,
 ): Promise<Array<{ encounterType: string | null; count: number }>> {
   const { data } = await client.get<
     ApiResponse<Array<{ encounterType: string | null; count: number }>>
-  >('/analytics/encounter-types', {
-    params: organizationId ? { organizationId } : undefined,
-  });
+  >('/analytics/encounter-types');
   return data.data;
 }
 
 export async function fetchSessionAnalytics(
   client: AxiosInstance,
-  organizationId?: string,
 ): Promise<
   Array<{
     id: string;
@@ -629,9 +442,7 @@ export async function fetchSessionAnalytics(
         coldCount: number;
       }>
     >
-  >('/analytics/sessions', {
-    params: organizationId ? { organizationId } : undefined,
-  });
+  >('/analytics/sessions');
   return data.data;
 }
 
@@ -652,45 +463,6 @@ export async function fetchPlatformAnalytics(client: AxiosInstance): Promise<{
   return data.data;
 }
 
-export async function fetchBillingSubscription(client: AxiosInstance): Promise<{
-  organizationId: string;
-  plan: string;
-  planName: string;
-  planPriceInr: number;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
-  billingEnabled: boolean;
-}> {
-  const { data } = await client.get<
-    ApiResponse<{
-      organizationId: string;
-      plan: string;
-      planName: string;
-      planPriceInr: number;
-      stripeCustomerId: string | null;
-      stripeSubscriptionId: string | null;
-      billingEnabled: boolean;
-    }>
-  >('/billing/subscription');
-  return data.data;
-}
 
-export async function createBillingCheckout(
-  client: AxiosInstance,
-  planCode: 'pro' = 'pro',
-): Promise<{ url: string; sessionId: string }> {
-  const { data } = await client.post<
-    ApiResponse<{ url: string; sessionId: string }>
-  >('/billing/checkout', { planCode });
-  return data.data;
-}
-
-export async function createBillingPortal(
-  client: AxiosInstance,
-): Promise<{ url: string }> {
-  const { data } =
-    await client.post<ApiResponse<{ url: string }>>('/billing/portal');
-  return data.data;
-}
 
 export { axios };

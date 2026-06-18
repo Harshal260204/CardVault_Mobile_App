@@ -6,7 +6,6 @@ import {
 
 export interface ContactDto {
   id: string;
-  organizationId: string;
   createdById: string;
   fullName: string;
   company: string | null;
@@ -32,7 +31,6 @@ export interface ContactDto {
 export function toContactDto(contact: Contact): ContactDto {
   return {
     id: contact.id,
-    organizationId: contact.organizationId,
     createdById: contact.createdById,
     fullName: contact.fullName,
     company: contact.company,
@@ -75,11 +73,9 @@ export function buildContactCreateData(
     leadNote?: string;
     followUpDate?: string;
   },
-  organizationId: string,
   createdById: string,
 ): Prisma.ContactCreateInput {
   return {
-    organization: { connect: { id: organizationId } },
     createdBy: { connect: { id: createdById } },
     fullName: dto.fullName.trim(),
     company: dto.company?.trim() || null,

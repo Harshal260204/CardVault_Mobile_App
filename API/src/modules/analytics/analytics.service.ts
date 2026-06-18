@@ -7,20 +7,8 @@ import type { RequestUser } from '../auth/auth.types';
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private orgId(user: RequestUser, queryOrgId?: string): string {
-    if (
-      (user.role === UserRole.platform_super_admin ||
-        user.role === UserRole.platform_support) &&
-      queryOrgId
-    ) {
-      return queryOrgId;
-    }
-    return user.organizationId;
-  }
-
-  async leadFunnel(user: RequestUser, queryOrgId?: string) {
-    const organizationId = this.orgId(user, queryOrgId);
-    const base = { organizationId, deletedAt: null, isMerged: false };
+  async leadFunnel() {
+    const base = { deletedAt: null, isMerged: false };
     const [hot, warm, cold, unqualified] = await Promise.all([
       this.prisma.contact.count({ where: { ...base, leadQualifier: 'hot' } }),
       this.prisma.contact.count({ where: { ...base, leadQualifier: 'warm' } }),
@@ -30,11 +18,10 @@ export class AnalyticsService {
     return { hot, warm, cold, unqualified };
   }
 
-  async encounterTypes(user: RequestUser, queryOrgId?: string) {
-    const organizationId = this.orgId(user, queryOrgId);
+  async encounterTypes() {
     const rows = await this.prisma.contact.groupBy({
       by: ['encounterType'],
-      where: { organizationId, deletedAt: null, encounterType: { not: null } },
+      where: { deletedAt: null, encounterType: { not: null } },
       _count: { id: true },
     });
     return rows.map((r) => ({
@@ -43,10 +30,9 @@ export class AnalyticsService {
     }));
   }
 
-  async sessions(user: RequestUser, queryOrgId?: string) {
-    const organizationId = this.orgId(user, queryOrgId);
+  async sessions() {
     const sessions = await this.prisma.eventSession.findMany({
-      where: { organizationId, deletedAt: null },
+      where: { deletedAt: null },
       orderBy: { startDate: 'desc' },
       take: 50,
       select: {
@@ -64,17 +50,16 @@ export class AnalyticsService {
   }
 
   async platform(user: RequestUser) {
-    if (user.role !== UserRole.platform_super_admin) {
+    if (user.role !== UserRole.super_admin) {
       return null;
     }
-    const [orgs, users, contacts, ocrJobs] = await Promise.all([
-      this.prisma.organization.count({ where: { deletedAt: null } }),
+    const [users, contacts, ocrJobs] = await Promise.all([
       this.prisma.user.count({ where: { deletedAt: null } }),
       this.prisma.contact.count({
         where: { deletedAt: null, isMerged: false },
       }),
       this.prisma.ocrJob.count(),
     ]);
-    return { organizations: orgs, users, contacts, ocrJobs };
+    return { users, contacts, ocrJobs };
   }
 }

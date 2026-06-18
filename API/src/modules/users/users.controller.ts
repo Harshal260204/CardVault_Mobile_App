@@ -16,19 +16,14 @@ import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { PlatformTenantBypass } from '../../common/decorators/platform-tenant-bypass.decorator';
+
 import { Roles } from '../../common/decorators/roles.decorator';
 
 import type { RequestUser } from '../auth/auth.types';
 
 @Controller('users')
-@Roles(
-  UserRole.manager,
-  UserRole.tenant_admin,
-  UserRole.platform_super_admin,
-  UserRole.platform_support,
-)
-@PlatformTenantBypass()
+@Roles(UserRole.super_admin)
+
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

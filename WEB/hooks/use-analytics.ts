@@ -10,24 +10,24 @@ import {
 import { queryKeys } from '@/lib/query-keys';
 import { useQuery } from '@tanstack/react-query';
 
-export function useLeadFunnelAnalytics(organizationId?: string) {
+export function useLeadFunnelAnalytics() {
   return useQuery({
-    queryKey: queryKeys.analytics.funnel(organizationId),
-    queryFn: () => fetchLeadFunnel(api, organizationId),
+    queryKey: queryKeys.analytics.funnel(),
+    queryFn: () => fetchLeadFunnel(api),
   });
 }
 
-export function useEncounterTypeAnalytics(organizationId?: string) {
+export function useEncounterTypeAnalytics() {
   return useQuery({
-    queryKey: queryKeys.analytics.encounters(organizationId),
-    queryFn: () => fetchEncounterTypeAnalytics(api, organizationId),
+    queryKey: queryKeys.analytics.encounters(),
+    queryFn: () => fetchEncounterTypeAnalytics(api),
   });
 }
 
-export function useSessionAnalytics(organizationId?: string) {
+export function useSessionAnalytics() {
   return useQuery({
-    queryKey: queryKeys.analytics.sessions(organizationId),
-    queryFn: () => fetchSessionAnalytics(api, organizationId),
+    queryKey: queryKeys.analytics.sessions(),
+    queryFn: () => fetchSessionAnalytics(api),
   });
 }
 

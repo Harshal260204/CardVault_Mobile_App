@@ -4,7 +4,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { RequestUser } from '../../modules/auth/auth.types';
 
 export interface AuditLogInput {
-  organizationId?: string | null;
   actorId?: string;
   actorRole?: UserRole;
   eventType: string;
@@ -32,7 +31,6 @@ export class AuditService {
   async log(input: AuditLogInput): Promise<void> {
     await this.prisma.auditEvent.create({
       data: {
-        organizationId: input.organizationId ?? undefined,
         actorId: input.actorId,
         actorRole: input.actorRole,
         eventType: input.eventType,
@@ -52,7 +50,6 @@ export class AuditService {
   ): Promise<void> {
     await this.log({
       ...input,
-      organizationId: user.organizationId,
       actorId: user.id,
       actorRole: user.role,
     });

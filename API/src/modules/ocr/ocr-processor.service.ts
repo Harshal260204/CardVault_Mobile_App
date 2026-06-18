@@ -60,7 +60,6 @@ export class OcrProcessorService {
       const fields = result.fields as ExtractedFieldSet;
 
       const candidates = await this.duplicates.findCandidates(
-        job.organizationId,
         result.fields,
       );
 
@@ -71,7 +70,6 @@ export class OcrProcessorService {
       for (const candidate of candidates) {
         await this.prisma.relationshipMatch.create({
           data: {
-            organizationId: job.organizationId,
             incomingOcrJobId: jobId,
             matchedContactId: candidate.contactId,
             matchConfidence: candidate.matchConfidence,

@@ -29,30 +29,8 @@ export type ExportStatus =
   | 'failed'
   | 'expired';
 
-export type SyncStatus =
-  | 'pending'
-  | 'processing'
-  | 'synced'
-  | 'conflict'
-  | 'dead_letter';
 
-export type EncounterType =
-  | 'flight'
-  | 'b2b'
-  | 'airport'
-  | 'dinner'
-  | 'referral'
-  | 'hallway'
-  | 'other';
 
-export interface JwtClaims {
-  sub: string;
-  org: string;
-  role: UserRole;
-  jti: string;
-  exp: number;
-  iat: number;
-}
 
 export interface ApiMeta {
   page?: number;
@@ -77,7 +55,6 @@ export interface ApiResponse<T> {
 
 export interface UserProfile {
   id: string;
-  organizationId: string;
   email: string;
   fullName: string | null;
   role: UserRole;
@@ -107,7 +84,6 @@ export interface HealthStatus {
 
 export interface ContactRecord {
   id: string;
-  organizationId: string;
   createdById: string;
   fullName: string;
   company: string | null;
@@ -130,7 +106,6 @@ export interface ContactRecord {
 
 export interface EventSessionRecord {
   id: string;
-  organizationId: string;
   createdById: string;
   name: string;
   mode: CaptureMode;
@@ -149,8 +124,6 @@ export interface EventSessionRecord {
 
 export interface OrgUserRecord {
   id: string;
-  organizationId: string;
-  organizationName?: string | null;
   email: string;
   fullName: string | null;
   role: UserRole;
@@ -159,32 +132,8 @@ export interface OrgUserRecord {
   createdAt: string;
 }
 
-export interface OrganizationRecord {
-  id: string;
-  name: string;
-  slug: string;
-  plan: string;
-  planName: string;
-  planPriceInr: number;
-  planBillingInterval: string | null;
-  maxUsers: number;
-  storageQuotaGb: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  managerEmail?: string;
-  managerName?: string;
-}
 
-export interface PlanRecord {
-  id: string;
-  code: string;
-  name: string;
-  priceInr: number;
-  billingInterval: string | null;
-  description: string | null;
-  isActive: boolean;
-}
+
 
 export interface PaginatedList<T> {
   items: T[];
@@ -212,7 +161,6 @@ export interface DashboardStats {
 
 export interface AuditEventRecord {
   id: string;
-  organizationId: string | null;
   actorId: string | null;
   actorEmail: string | null;
   actorRole: string | null;
@@ -236,7 +184,6 @@ export interface OcrRelationshipMatch {
 
 export interface OcrJobRecord {
   id: string;
-  organizationId: string;
   contactId: string | null;
   cardImageId: string;
   sessionId: string | null;
@@ -254,7 +201,6 @@ export interface OcrJobRecord {
 
 export interface ExportJobRecord {
   id: string;
-  organizationId: string;
   requestedById: string;
   exportType: string;
   sessionId: string | null;

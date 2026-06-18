@@ -15,12 +15,10 @@ export interface ExportQueuePayload {
 
 export interface RelationshipQueuePayload {
   ocrJobId: string;
-  organizationId: string;
 }
 
 export interface SessionCounterPayload {
   sessionId: string;
-  organizationId: string;
   hot?: number;
   warm?: number;
   cold?: number;

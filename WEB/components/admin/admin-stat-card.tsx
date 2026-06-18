@@ -68,13 +68,13 @@ export function AdminStatCard({
         )}
       </div>
 
-      <p className="text-[36px] font-bold leading-none mt-3 text-text-primary tracking-tight">
+      <div className="text-[36px] font-bold leading-none mt-3 text-text-primary tracking-tight">
         {loading ? (
           <Skeleton className="h-9 w-20" />
         ) : (
           <CountUp value={value} />
         )}
-      </p>
+      </div>
 
       {hint && <p className="text-xs text-text-tertiary mt-1.5">{hint}</p>}
     </div>

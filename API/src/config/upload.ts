@@ -9,8 +9,8 @@ export function getUploadRoot(): string {
   return root;
 }
 
-export function orgUploadDir(organizationId: string): string {
-  const dir = join(getUploadRoot(), organizationId);
+export function orgUploadDir(): string {
+  const dir = join(getUploadRoot(), 'global');
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }

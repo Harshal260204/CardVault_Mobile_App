@@ -9,8 +9,8 @@ export function getExportRoot(): string {
   return root;
 }
 
-export function orgExportDir(organizationId: string): string {
-  const dir = join(getExportRoot(), organizationId);
+export function orgExportDir(): string {
+  const dir = join(getExportRoot(), 'global');
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
   }

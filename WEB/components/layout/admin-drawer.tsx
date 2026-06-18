@@ -5,7 +5,6 @@ import {
   BarChart3,
   CalendarDays,
   Contact,
-  CreditCard,
   Download,
   LayoutDashboard,
   Menu,
@@ -23,7 +22,7 @@ import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 
 import { CommandPalette } from '@/components/admin/command-palette';
-import { useOrganizations } from '@/hooks/use-admin';
+
 import { isPlatformSuperAdmin } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -62,7 +61,6 @@ const navGroups: readonly NavGroup[] = [
     items: [
       { href: '/admin/audit-log', label: 'Audit Log', icon: Shield },
       { href: '/admin/export', label: 'Export', icon: Download },
-      { href: '/admin/billing', label: 'Billing', icon: CreditCard },
     ],
   },
 ];
@@ -186,14 +184,7 @@ export function AdminDrawer({ children }: { children: ReactNode }) {
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
-  const { data: organizations } = useOrganizations(isSuperAdmin);
 
-  const currentOrgName = isSuperAdmin
-    ? (organizations?.find((org) => org.id === currentUser?.organizationId)
-        ?.name ??
-      currentUser?.organizationId ??
-      'Super Admin')
-    : null;
 
   const segments = pathname.split('/').filter(Boolean);
   const formatSegment = (segment: string) => {
@@ -402,15 +393,7 @@ export function AdminDrawer({ children }: { children: ReactNode }) {
               ))}
             </div>
 
-            {/* Middle: Organization context pill (for super admin only) */}
-            {isSuperAdmin && currentOrgName && (
-              <div
-                className="mx-4 px-2.5 py-1 text-xs font-medium rounded-full bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400 border border-brand-100 dark:border-brand-500/20 max-w-[200px] truncate"
-                title={`Organization Context: ${currentOrgName}`}
-              >
-                Org: {currentOrgName}
-              </div>
-            )}
+
 
             {/* Right actions */}
             <div className="flex items-center gap-3">

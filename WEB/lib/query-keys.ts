@@ -27,19 +27,11 @@ export const queryKeys = {
       ['admin', 'audit', params] as const,
     exports: (params: Record<string, unknown>) =>
       ['admin', 'exports', params] as const,
-    organizations: ['admin', 'organizations'] as const,
-    plans: ['admin', 'plans'] as const,
   },
   analytics: {
-    funnel: (organizationId?: string) =>
-      ['analytics', 'funnel', organizationId ?? 'self'] as const,
-    encounters: (organizationId?: string) =>
-      ['analytics', 'encounters', organizationId ?? 'self'] as const,
-    sessions: (organizationId?: string) =>
-      ['analytics', 'sessions', organizationId ?? 'self'] as const,
+    funnel: () => ['analytics', 'funnel'] as const,
+    encounters: () => ['analytics', 'encounters'] as const,
+    sessions: () => ['analytics', 'sessions'] as const,
     platform: ['analytics', 'platform'] as const,
-  },
-  billing: {
-    subscription: ['billing', 'subscription'] as const,
   },
 };

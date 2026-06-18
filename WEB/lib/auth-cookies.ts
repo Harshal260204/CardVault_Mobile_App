@@ -1,4 +1,3 @@
-import { isUserRole } from '@/lib/roles';
 import type { UserRole } from '@/lib/types';
 
 const ACCESS_COOKIE = 'cardvault_access_token';
@@ -29,14 +28,3 @@ export function clearAuthCookies(): void {
   document.cookie = `${ROLE_COOKIE}=; ${expires}`;
 }
 
-export function getRoleFromCookie(): UserRole | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(
-    new RegExp(`(?:^|; )${ROLE_COOKIE}=([^;]*)`),
-  );
-  const value = match?.[1];
-  if (isUserRole(value)) {
-    return value;
-  }
-  return null;
-}

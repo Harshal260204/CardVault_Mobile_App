@@ -30,7 +30,7 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Authentication required');
     }
 
-    if (user.role === 'super_admin' || user.role === 'platform_super_admin') {
+    if (user.role === 'super_admin') {
       return true;
     }
 

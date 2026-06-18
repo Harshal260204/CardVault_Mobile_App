@@ -25,12 +25,10 @@ const BCRYPT_ROUNDS = 12;
 
 export interface AuthUserDto {
   id: string;
-  organizationId?: string | null;
   email: string;
   fullName: string | null;
   role: UserRole;
   isActive: boolean;
-  organizationName?: string;
   createdAt?: Date;
   cardsScanned?: number;
 }
@@ -66,7 +64,6 @@ export class AuthService {
   private toRequestUser(payload: JwtPayload): RequestUser {
     return {
       id: payload.sub,
-      organizationId: payload.org,
       role: payload.role,
       email: payload.email,
       jti: payload.jti,
@@ -75,7 +72,6 @@ export class AuthService {
 
   private signAccessToken(user: {
     id: string;
-    organizationId?: string | null;
     role: UserRole;
     email: string;
   }): { token: string; jti: string; expiresIn: number } {
@@ -83,7 +79,6 @@ export class AuthService {
     const expiresIn = this.accessTtlSeconds;
     const payload: JwtPayload = {
       sub: user.id,
-      org: user.organizationId ?? '',
       role: user.role,
       email: user.email,
       jti,
@@ -99,14 +94,12 @@ export class AuthService {
 
   private signRefreshToken(user: {
     id: string;
-    organizationId?: string | null;
     role: UserRole;
     email: string;
   }): { token: string; jti: string } {
     const jti = randomUUID();
     const payload: JwtPayload = {
       sub: user.id,
-      org: user.organizationId ?? '',
       role: user.role,
       email: user.email,
       jti,
@@ -132,6 +125,10 @@ export class AuthService {
       if (await this.redis.isBlocklisted(payload.jti)) {
         throw new UnauthorizedException('Token revoked');
       }
+      const dbUser = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true },
+      });
       return this.toRequestUser(payload);
     } catch (e) {
       this.logger.error('verifyAccessToken error details:', e);
@@ -165,7 +162,6 @@ export class AuthService {
 
   private mapUser(user: {
     id: string;
-    organizationId?: string | null;
     email: string;
     fullName: string | null;
     role: UserRole;
@@ -173,7 +169,6 @@ export class AuthService {
   }): AuthUserDto {
     return {
       id: user.id,
-      organizationId: user.organizationId,
       email: user.email,
       fullName: user.fullName,
       role: user.role,
@@ -181,26 +176,14 @@ export class AuthService {
     };
   }
 
-  private async assertUserOrgActive(organizationId?: string | null): Promise<void> {
-    if (!organizationId) return;
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
-    if (!org || !org.isActive || org.deletedAt) {
-      throw new ForbiddenException('Organization is inactive');
-    }
-  }
-
   private async issueTokens(
     user: {
       id: string;
-      organizationId?: string | null;
       role: UserRole;
       email: string;
     },
     parentJti?: string,
   ): Promise<TokenPairDto> {
-    await this.assertUserOrgActive(user.organizationId);
 
     const access = this.signAccessToken(user);
     const refresh = this.signRefreshToken(user);
@@ -256,6 +239,9 @@ export class AuthService {
 
     const passwordHash = await AuthService.hashPassword(dto.password);
 
+    const orgName = `${dto.fullName || 'User'}'s Vault`;
+    const orgSlug = `vault-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -297,12 +283,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    await this.assertUserOrgActive(user.organizationId);
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
       await this.audit.log({
-        organizationId: user.organizationId,
         eventType: 'auth.login.failed',
         entityType: 'user',
         entityId: user.id,
@@ -315,7 +299,6 @@ export class AuthService {
 
     const tokens = await this.issueTokens(user);
     await this.audit.log({
-      organizationId: user.organizationId,
       actorId: user.id,
       actorRole: user.role,
       eventType: 'auth.login.success',
@@ -354,7 +337,6 @@ export class AuthService {
         await this.redis.setBlocklist(payload.jti, this.refreshTtlSeconds);
 
         await this.audit.log({
-          organizationId: user.organizationId,
           actorId: user.id,
           actorRole: user.role,
           eventType: 'auth.replay_attack_detected',
@@ -410,7 +392,6 @@ export class AuthService {
   async getProfile(userId: string): Promise<AuthUserDto> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { organization: true },
     });
     if (!user || user.deletedAt || !user.isActive) {
       throw new UnauthorizedException('User not found');
@@ -420,7 +401,6 @@ export class AuthService {
     });
     return {
       ...this.mapUser(user),
-      organizationName: user.organization?.name,
       createdAt: user.createdAt,
       cardsScanned,
     };

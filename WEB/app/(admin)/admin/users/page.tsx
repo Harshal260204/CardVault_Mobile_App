@@ -15,7 +15,6 @@ import { Input } from '@/components/ui/input';
 import { Modal, ConfirmDialog } from '@/components/ui/modal';
 import {
   useDeleteOrgUser,
-  useOrganizations,
   useUpdateOrgUser,
 } from '@/hooks/use-admin';
 import { useOrgUsers, useCreateOrgUser } from '@/hooks/use-org-users';
@@ -56,7 +55,6 @@ type CreateUserFormState = {
   fullName: string;
   role: UserRole;
   password: string;
-  organizationId: string;
 };
 
 type EditUserFormState = {
@@ -69,21 +67,14 @@ function UsersContent() {
   const currentUser = useAuthStore((s) => s.user);
   const isSuperAdmin = isPlatformSuperAdmin(currentUser?.role);
 
-  const searchParams = useSearchParams();
-  const initialOrgId =
-    searchParams.get('orgId') || searchParams.get('organizationId') || '';
-
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [debouncedQ, setDebouncedQ] = useState('');
-  const [selectedOrganizationId, setSelectedOrganizationId] =
-    useState(initialOrgId);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
 
   const limit = 15;
   const updateUser = useUpdateOrgUser();
   const deleteUser = useDeleteOrgUser();
-  const { data: organizations } = useOrganizations(Boolean(isSuperAdmin));
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateUserFormState>({
@@ -91,7 +82,6 @@ function UsersContent() {
     fullName: '',
     role: 'employee',
     password: '',
-    organizationId: currentUser?.organizationId ?? '',
   });
   const [createError, setCreateError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<OrgUserRecord | null>(null);
@@ -114,9 +104,6 @@ function UsersContent() {
         fullName: createForm.fullName.trim(),
         role: isSuperAdmin ? createForm.role : 'employee',
         password: createForm.password,
-        organizationId: isSuperAdmin
-          ? createForm.organizationId.trim()
-          : undefined,
       });
       setIsCreateOpen(false);
       setCreateForm({
@@ -124,8 +111,6 @@ function UsersContent() {
         fullName: '',
         role: 'employee',
         password: '',
-        organizationId:
-          selectedOrganizationId || currentUser?.organizationId || '',
       });
     } catch (err: unknown) {
       setCreateError(getErrorMessage(err, 'Failed to create user'));
@@ -139,8 +124,6 @@ function UsersContent() {
       fullName: '',
       role: 'employee',
       password: '',
-      organizationId:
-        selectedOrganizationId || currentUser?.organizationId || '',
     });
     setIsCreateOpen(true);
   };
@@ -195,10 +178,6 @@ function UsersContent() {
     page,
     limit,
     q: debouncedQ || undefined,
-    organizationId:
-      isSuperAdmin && selectedOrganizationId
-        ? selectedOrganizationId
-        : undefined,
   });
 
   const totalPages = Math.max(1, Math.ceil((data?.meta.total ?? 0) / limit));
@@ -224,18 +203,6 @@ function UsersContent() {
         </div>
       ),
     },
-    ...(isSuperAdmin
-      ? [
-          {
-            key: 'organization',
-            header: 'Organization',
-            className: 'min-w-[150px]',
-            render: (row: OrgUserRecord) => (
-              <span>{row.organizationName ?? row.organizationId}</span>
-            ),
-          } satisfies DataTableColumn<OrgUserRecord>,
-        ]
-      : []),
     {
       key: 'role',
       header: 'Role',
@@ -379,23 +346,6 @@ function UsersContent() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {isSuperAdmin ? (
-            <select
-              className="w-full rounded-md border border-neutral-200 bg-neutral-0 dark:border-neutral-800 dark:bg-neutral-900 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand-600/20 md:max-w-sm"
-              value={selectedOrganizationId}
-              onChange={(e) => {
-                setSelectedOrganizationId(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="">All organizations</option>
-              {organizations?.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
         </CardContent>
       </Card>
 
@@ -413,7 +363,7 @@ function UsersContent() {
                 description={
                   isSuperAdmin
                     ? 'Create a user to assign them to organizations.'
-                    : 'Invite your first salesperson to start scanning cards.'
+                    : 'Create your first salesperson to start scanning cards.'
                 }
                 actionLabel="Add User"
                 onAction={openCreateModal}
@@ -538,31 +488,6 @@ function UsersContent() {
                 >
                   <option value="employee">Employee</option>
                   <option value="manager">Manager</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-text-tertiary mb-1">
-                  Organization
-                </label>
-                <select
-                  className="w-full rounded-md border border-neutral-200 bg-neutral-0 dark:border-neutral-800 dark:bg-neutral-900 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand-600/20"
-                  value={createForm.organizationId}
-                  onChange={(e) =>
-                    setCreateForm((current) => ({
-                      ...current,
-                      organizationId: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="" disabled>
-                    Select organization
-                  </option>
-                  {organizations?.map((org) => (
-                    <option key={org.id} value={org.id}>
-                      {org.name}
-                    </option>
-                  ))}
                 </select>
               </div>
             </>
