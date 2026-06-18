@@ -15,10 +15,7 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../../common/decorators/roles.decorator';
-import {
-  RateLimit,
-  RateLimitGuard,
-} from '../../common/guards/rate-limit.guard';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -42,14 +39,14 @@ export const imageFileFilter = (
 };
 
 @Controller('ocr')
-@UseGuards(RateLimitGuard)
+@Throttle({ default: { limit: 60, ttl: 3600000 } }) // OCR Processing / general class limit: 60 per hour
 export class OcrController {
   private readonly logger = new Logger(OcrController.name);
 
   constructor(private readonly ocrService: OcrService) {}
 
   @Post('submit')
-  @RateLimit({ keyPrefix: 'ocr:submit', limit: 30, windowSeconds: 60 })
+  @Throttle({ default: { limit: 20, ttl: 3600000 } }) // 20 uploads per hour
   @UseInterceptors(
     FileInterceptor('image', {
       storage: memoryStorage(),
@@ -67,7 +64,7 @@ export class OcrController {
   }
 
   @Post('jobs')
-  @RateLimit({ keyPrefix: 'ocr:submit', limit: 30, windowSeconds: 60 })
+  @Throttle({ default: { limit: 20, ttl: 3600000 } }) // 20 uploads per hour
   @UseInterceptors(
     FileInterceptor('image', {
       storage: memoryStorage(),

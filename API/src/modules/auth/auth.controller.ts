@@ -10,6 +10,7 @@ import {
 import type { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Throttle } from '@nestjs/throttler';
 
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -22,6 +23,7 @@ import { CORRELATION_HEADER } from '../../common/middleware/correlation-id.middl
 type AuthRequest = Request & { correlationId?: string };
 
 @Controller('auth')
+@Throttle({ default: { limit: 10, ttl: 60000 } })
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 

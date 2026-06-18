@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
+
 import { DuplicateDetectionService } from './duplicate-detection.service';
 import { OcrExtractionService } from './ocr-extraction.service';
 import { OcrProcessorService } from './ocr-processor.service';
@@ -26,7 +26,6 @@ const queueProcessors = process.env.REDIS_URL?.trim()
     OcrProviderFactory,
     RegexContactParser,
     DuplicateDetectionService,
-    RateLimitGuard,
     ...queueProcessors,
   ],
   exports: [OcrService],
