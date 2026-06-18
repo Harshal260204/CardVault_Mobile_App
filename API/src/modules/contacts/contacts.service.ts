@@ -261,7 +261,7 @@ export class ContactsService {
     const merged = await this.prisma.$transaction(async (tx) => {
       await tx.contactMergeHistory.create({
         data: {
-          organization: { connect: { id: '00000000-0000-0000-0000-000000000000' } },
+
           sourceContactId: source.id,
           targetContactId: target.id,
           sourceSnapshot: source as object,

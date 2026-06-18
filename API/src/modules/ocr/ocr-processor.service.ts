@@ -70,7 +70,6 @@ export class OcrProcessorService {
       for (const candidate of candidates) {
         await this.prisma.relationshipMatch.create({
           data: {
-            organizationId: '00000000-0000-0000-0000-000000000000',
             incomingOcrJobId: jobId,
             matchedContactId: candidate.contactId,
             matchConfidence: candidate.matchConfidence,

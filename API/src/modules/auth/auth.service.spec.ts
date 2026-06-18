@@ -23,7 +23,7 @@ describe('AuthService', () => {
     id: 'user-1',
     email: 'user@test.com',
     fullName: 'Test User',
-    role: 'employee' as const,
+    role: 'user' as const,
     isActive: true,
     deletedAt: null,
     passwordHash: 'hash',

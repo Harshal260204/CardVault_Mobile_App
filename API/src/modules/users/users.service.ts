@@ -1,4 +1,4 @@
- import {
+import {
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -98,8 +98,6 @@ export class UsersService {
       throw new ForbiddenException('You cannot deactivate your own account');
     }
 
-
-
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
@@ -140,36 +138,15 @@ export class UsersService {
       throw new ConflictException('Email already exists');
     }
 
-    const organizationId = '00000000-0000-0000-0000-000000000000';
-
-    const targetRole = dto.role ?? UserRole.employee;
-    if (
-      actor.role === UserRole.manager &&
-      targetRole !== UserRole.employee &&
-      targetRole !== UserRole.manager
-    ) {
-      throw new ForbiddenException(
-        'Managers can only create employee or manager accounts',
-      );
+    const targetRole = dto.role ?? UserRole.user;
+    if (actor.role !== UserRole.super_admin && targetRole === UserRole.super_admin) {
+      throw new ForbiddenException('Only super admins can create super admin accounts');
     }
-    if (
-      actor.role !== UserRole.platform_super_admin &&
-      actor.role !== UserRole.platform_support &&
-      (targetRole === UserRole.platform_super_admin ||
-        targetRole === UserRole.platform_support)
-    ) {
-      throw new ForbiddenException(
-        'Only platform admins can create platform accounts',
-      );
-    }
-
-
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
     const newUser = await this.prisma.user.create({
       data: {
-        organizationId,
         email,
         fullName: dto.fullName?.trim() || null,
         role: targetRole,
@@ -237,74 +214,12 @@ export class UsersService {
     actor: RequestUser,
     targetRole: UserRole,
   ): void {
-    if (actor.role === UserRole.platform_super_admin) return;
-    if (actor.role === UserRole.platform_support) {
-      if (
-        targetRole === UserRole.platform_super_admin ||
-        targetRole === UserRole.platform_support
-      ) {
-        throw new ForbiddenException(
-          'Platform support cannot manage other platform accounts',
-        );
-      }
-      return;
-    }
-    if (actor.role === UserRole.tenant_admin) {
-      if (
-        targetRole === UserRole.platform_super_admin ||
-        targetRole === UserRole.platform_support
-      ) {
-        throw new ForbiddenException(
-          'Tenant admins cannot manage platform accounts',
-        );
-      }
-      return;
-    }
-    if (actor.role === UserRole.manager) {
-      if (targetRole !== UserRole.employee && targetRole !== UserRole.manager) {
-        throw new ForbiddenException(
-          'Managers can only manage employee or manager accounts',
-        );
-      }
-      return;
-    }
+    if (actor.role === UserRole.super_admin) return;
     throw new ForbiddenException('Insufficient permissions');
   }
 
   private assertCanChangeRole(actor: RequestUser, nextRole: string): void {
-    if (actor.role === UserRole.platform_super_admin) return;
-    if (nextRole === UserRole.platform_super_admin) {
-      throw new ForbiddenException(
-        'Only platform super admins can assign the platform super admin role',
-      );
-    }
-    if (actor.role === UserRole.platform_support) {
-      if (nextRole === UserRole.platform_support) {
-        throw new ForbiddenException(
-          'Platform support cannot assign platform roles',
-        );
-      }
-      return;
-    }
-    if (actor.role === UserRole.tenant_admin) {
-      if (
-        nextRole === UserRole.platform_support ||
-        nextRole === UserRole.platform_super_admin
-      ) {
-        throw new ForbiddenException(
-          'Tenant admins cannot assign platform roles',
-        );
-      }
-      return;
-    }
-    if (actor.role === UserRole.manager) {
-      if (nextRole !== UserRole.employee && nextRole !== UserRole.manager) {
-        throw new ForbiddenException(
-          'Managers can only assign employee or manager roles',
-        );
-      }
-      return;
-    }
+    if (actor.role === UserRole.super_admin) return;
     throw new ForbiddenException('Insufficient permissions');
   }
 }

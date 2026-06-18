@@ -242,25 +242,14 @@ export class AuthService {
     const orgName = `${dto.fullName || 'User'}'s Vault`;
     const orgSlug = `vault-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      const org = await tx.organization.create({
-        data: {
-          name: orgName,
-          slug: orgSlug,
-          plan: 'free',
-        },
-      });
-
-      return tx.user.create({
-        data: {
-          email,
-          fullName: dto.fullName,
-          passwordHash,
-          role: 'user',
-          organizationId: org.id,
-          isActive: true,
-        },
-      });
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        fullName: dto.fullName,
+        passwordHash,
+        role: 'user',
+        isActive: true,
+      },
     });
 
     const tokens = await this.issueTokens(user);

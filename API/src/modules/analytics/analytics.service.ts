@@ -50,17 +50,16 @@ export class AnalyticsService {
   }
 
   async platform(user: RequestUser) {
-    if (user.role !== UserRole.platform_super_admin) {
+    if (user.role !== UserRole.super_admin) {
       return null;
     }
-    const [orgs, users, contacts, ocrJobs] = await Promise.all([
-      this.prisma.organization.count({ where: { deletedAt: null } }),
+    const [users, contacts, ocrJobs] = await Promise.all([
       this.prisma.user.count({ where: { deletedAt: null } }),
       this.prisma.contact.count({
         where: { deletedAt: null, isMerged: false },
       }),
       this.prisma.ocrJob.count(),
     ]);
-    return { organizations: orgs, users, contacts, ocrJobs };
+    return { users, contacts, ocrJobs };
   }
 }

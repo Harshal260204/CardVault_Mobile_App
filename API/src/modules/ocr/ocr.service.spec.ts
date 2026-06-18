@@ -18,7 +18,7 @@ describe('OcrService', () => {
   const user: RequestUser = {
     id: 'user-1',
     email: 'employee@test.com',
-    role: 'employee',
+    role: 'user',
     jti: 'jti-1',
   };
 

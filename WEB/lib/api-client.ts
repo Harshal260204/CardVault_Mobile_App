@@ -127,12 +127,6 @@ export function createApiClient(config: ApiClientConfig): AxiosInstance {
   return client;
 }
 
-export async function healthCheck(
-  client: AxiosInstance,
-): Promise<HealthStatus> {
-  const { data } = await client.get<ApiResponse<HealthStatus>>('/health');
-  return data.data;
-}
 
 export async function login(
   client: AxiosInstance,
@@ -192,15 +186,6 @@ export async function deleteContact(
   return data.data;
 }
 
-export async function fetchSession(
-  client: AxiosInstance,
-  id: string,
-): Promise<EventSessionRecord> {
-  const { data } = await client.get<ApiResponse<EventSessionRecord>>(
-    `/sessions/${id}`,
-  );
-  return data.data;
-}
 
 export async function closeSession(
   client: AxiosInstance,
@@ -212,29 +197,6 @@ export async function closeSession(
   return data.data;
 }
 
-export async function fetchSessionStats(
-  client: AxiosInstance,
-  id: string,
-): Promise<{
-  sessionId: string;
-  scanCount: number;
-  hotCount: number;
-  warmCount: number;
-  coldCount: number;
-  status: string;
-}> {
-  const { data } = await client.get<
-    ApiResponse<{
-      sessionId: string;
-      scanCount: number;
-      hotCount: number;
-      warmCount: number;
-      coldCount: number;
-      status: string;
-    }>
-  >(`/sessions/${id}/stats`);
-  return data.data;
-}
 
 export async function fetchSessions(
   client: AxiosInstance,
@@ -300,83 +262,9 @@ export async function fetchMe(client: AxiosInstance): Promise<UserProfile> {
   return data.data;
 }
 
-export async function submitOcrJob(
-  client: AxiosInstance,
-  file: File,
-  payload: {
-    captureMode: CaptureMode;
-    sessionId?: string;
-    clientIdempotencyKey: string;
-  },
-): Promise<OcrJobRecord> {
-  const form = new FormData();
-  form.append('image', file);
-  form.append('captureMode', payload.captureMode);
-  form.append('clientIdempotencyKey', payload.clientIdempotencyKey);
-  if (payload.sessionId) {
-    form.append('sessionId', payload.sessionId);
-  }
-  const { data } = await client.post<ApiResponse<OcrJobRecord>>(
-    '/ocr/jobs',
-    form,
-    {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    },
-  );
-  return data.data;
-}
 
-export async function fetchOcrJobs(
-  client: AxiosInstance,
-  params?: {
-    page?: number;
-    limit?: number;
-    needsReview?: boolean;
-    status?: string;
-  },
-): Promise<PaginatedList<OcrJobRecord>> {
-  const { data } = await client.get<ApiResponse<OcrJobRecord[]>>('/ocr/jobs', {
-    params,
-  });
-  return {
-    items: data.data,
-    meta: {
-      page: data.meta?.page ?? 1,
-      limit: data.meta?.limit ?? 20,
-      total: data.meta?.total ?? data.data.length,
-    },
-  };
-}
 
-export async function fetchOcrJob(
-  client: AxiosInstance,
-  id: string,
-): Promise<OcrJobRecord> {
-  const { data } = await client.get<ApiResponse<OcrJobRecord>>(
-    `/ocr/jobs/${id}`,
-  );
-  return data.data;
-}
 
-export async function confirmOcrJob(
-  client: AxiosInstance,
-  id: string,
-  payload: {
-    fullName: string;
-    company?: string;
-    title?: string;
-    emails?: string[];
-    phones?: string[];
-    leadQualifier?: string;
-    duplicateAction?: 'new' | 'link';
-    linkToContactId?: string;
-  },
-): Promise<{ job: OcrJobRecord; contact: ContactRecord }> {
-  const { data } = await client.post<
-    ApiResponse<{ job: OcrJobRecord; contact: ContactRecord }>
-  >(`/ocr/jobs/${id}/confirm`, payload);
-  return data.data;
-}
 
 export async function mergeContacts(
   client: AxiosInstance,

@@ -79,7 +79,7 @@ export class SessionsService {
 
     const session = await this.prisma.eventSession.create({
       data: {
-        organization: { connect: { id: '00000000-0000-0000-0000-000000000000' } },
+
         createdBy: { connect: { id: user.id } },
         name: dto.name.trim(),
         mode: dto.mode,
@@ -94,7 +94,7 @@ export class SessionsService {
       data: {
         sessionId: session.id,
         userId: user.id,
-        organizationId: '00000000-0000-0000-0000-000000000000',
+
       },
     });
 
@@ -187,7 +187,7 @@ export class SessionsService {
       create: {
         sessionId: id,
         userId: user.id,
-        organizationId: '00000000-0000-0000-0000-000000000000',
+
       },
       update: {},
     });
@@ -214,7 +214,7 @@ export class SessionsService {
       create: {
         sessionId,
         userId: dto.userId,
-        organizationId: '00000000-0000-0000-0000-000000000000',
+
       },
       update: {},
     });

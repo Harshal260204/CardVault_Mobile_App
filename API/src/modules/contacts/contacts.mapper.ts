@@ -76,7 +76,6 @@ export function buildContactCreateData(
   createdById: string,
 ): Prisma.ContactCreateInput {
   return {
-    organization: { connect: { id: '00000000-0000-0000-0000-000000000000' } },
     createdBy: { connect: { id: createdById } },
     fullName: dto.fullName.trim(),
     company: dto.company?.trim() || null,

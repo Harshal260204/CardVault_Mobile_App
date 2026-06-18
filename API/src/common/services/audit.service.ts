@@ -31,7 +31,6 @@ export class AuditService {
   async log(input: AuditLogInput): Promise<void> {
     await this.prisma.auditEvent.create({
       data: {
-        organizationId: '00000000-0000-0000-0000-000000000000',
         actorId: input.actorId,
         actorRole: input.actorRole,
         eventType: input.eventType,

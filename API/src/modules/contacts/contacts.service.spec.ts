@@ -13,7 +13,7 @@ describe('ContactsService', () => {
 
   const user: RequestUser = {
     id: 'user-1',
-    role: 'employee',
+    role: 'user',
     email: 'employee@test.com',
     jti: 'jti-1',
   };

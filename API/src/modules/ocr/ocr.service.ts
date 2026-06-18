@@ -100,7 +100,6 @@ export class OcrService {
 
     const cardImage = await this.prisma.cardImage.create({
       data: {
-        organization: { connect: { id: '00000000-0000-0000-0000-000000000000' } },
         uploadedBy: { connect: { id: user.id } },
         storagePath,
         fileSizeBytes: buffer.length,
@@ -111,7 +110,6 @@ export class OcrService {
 
     const job = await this.prisma.ocrJob.create({
       data: {
-        organization: { connect: { id: '00000000-0000-0000-0000-000000000000' } },
         cardImage: { connect: { id: cardImage.id } },
         submittedBy: { connect: { id: user.id } },
         session: dto.sessionId ? { connect: { id: dto.sessionId } } : undefined,
@@ -364,7 +362,7 @@ export class OcrService {
     const matches = await this.prisma.relationshipMatch.findMany({
       where: { incomingOcrJobId: job.id },
     });
-    const contactIds = matches.map((m) => m.matchedContactId);
+    const contactIds = (matches || []).map((m) => m.matchedContactId);
     const contacts = contactIds.length
       ? await this.prisma.contact.findMany({
           where: { id: { in: contactIds } },
@@ -375,7 +373,7 @@ export class OcrService {
 
     return toOcrJobDto({
       ...job,
-      matches: matches.map((m) => ({
+      matches: (matches || []).map((m) => ({
         ...m,
         matchedContact: contactMap.get(m.matchedContactId) ?? null,
       })),
@@ -387,7 +385,7 @@ export class OcrService {
     contactId: string,
     job: {
       id: string;
-      organizationId: string;
+
       sessionId: string | null;
       captureMode: CaptureMode | null;
       cardImageId: string;
@@ -397,7 +395,7 @@ export class OcrService {
     await this.prisma.contactEncounter.create({
       data: {
         contact: { connect: { id: contactId } },
-        organization: { connect: { id: job.organizationId } },
+
         capturedBy: { connect: { id: user.id } },
         session: job.sessionId ? { connect: { id: job.sessionId } } : undefined,
         captureMode: job.captureMode ?? 'legacy',

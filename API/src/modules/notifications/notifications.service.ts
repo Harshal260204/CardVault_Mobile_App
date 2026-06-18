@@ -109,7 +109,7 @@ export class NotificationsService {
   async create(input: CreateNotificationInput) {
     const notification = await this.prisma.notification.create({
       data: {
-        organization: { connect: { id: input.organizationId } },
+
         user: { connect: { id: input.userId } },
         type: input.type,
         title: input.title,

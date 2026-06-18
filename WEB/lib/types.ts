@@ -45,14 +45,6 @@ export type EncounterType =
   | 'hallway'
   | 'other';
 
-export interface JwtClaims {
-  sub: string;
-  org: string;
-  role: UserRole;
-  jti: string;
-  exp: number;
-  iat: number;
-}
 
 export interface ApiMeta {
   page?: number;
@@ -154,18 +146,6 @@ export interface OrgUserRecord {
   createdAt: string;
 }
 
-export interface OrganizationRecord {
-  id: string;
-  name: string;
-  slug: string;
-  maxUsers: number;
-  storageQuotaGb: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  managerEmail?: string;
-  managerName?: string;
-}
 
 
 
