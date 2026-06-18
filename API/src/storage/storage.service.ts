@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { mkdir, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
@@ -12,11 +12,20 @@ export interface StorageUploadResult {
 }
 
 @Injectable()
-export class StorageService {
+export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name);
   private supabase: SupabaseClient | null = null;
 
   constructor(private readonly prisma: PrismaService) {}
+
+  onModuleInit() {
+    if (process.env.NODE_ENV === 'production' && this.driver === 'local') {
+      throw new Error(
+        'CRITICAL CONFIGURATION ERROR: Local storage driver is prohibited in production. ' +
+        'You must set STORAGE_DRIVER=supabase, SUPABASE_URL, and SUPABASE_SERVICE_ROLE_KEY.'
+      );
+    }
+  }
 
   get driver(): 'supabase' | 'local' {
     return process.env.STORAGE_DRIVER === 'supabase' &&
