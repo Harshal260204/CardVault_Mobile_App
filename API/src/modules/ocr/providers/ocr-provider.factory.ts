@@ -15,7 +15,7 @@ export class OcrProviderFactory {
   /** Active provider name from OCR_PROVIDER (default: google). */
   getProviderName(): OcrProviderName {
     const name = process.env.OCR_PROVIDER?.trim().toLowerCase() || 'google';
-    if (name === 'paddle') return 'paddle';
+
     if (name !== 'google') {
       this.logger.warn(
         `Unknown OCR_PROVIDER="${name}", falling back to google`,

@@ -154,8 +154,6 @@ export async function logout(
   });
 }
 
-
-
 export async function fetchContacts(
   client: AxiosInstance,
   params?: {

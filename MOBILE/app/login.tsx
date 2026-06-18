@@ -33,10 +33,10 @@ export default function LoginScreen() {
     setError(null);
     setLoading(true);
     try {
-      const { user, tokens } = isRegistering 
+      const { user, tokens } = isRegistering
         ? await register(api, email.trim(), password, fullName.trim())
         : await login(api, email.trim(), password);
-      
+
       if (!isMobileAppRole(user.role)) {
         setError('This account must use the CardVault admin console.');
         return;
@@ -70,10 +70,12 @@ export default function LoginScreen() {
           {isRegistering ? 'Create your account' : 'Field sales — sign in'}
         </Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        
+
         {isRegistering && (
           <>
-            <Text style={[styles.label, { color: colors.text }]}>Full Name</Text>
+            <Text style={[styles.label, { color: colors.text }]}>
+              Full Name
+            </Text>
             <TextInput
               style={[
                 styles.input,
@@ -126,16 +128,20 @@ export default function LoginScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>{isRegistering ? 'Sign up' : 'Sign in'}</Text>
+            <Text style={styles.buttonText}>
+              {isRegistering ? 'Sign up' : 'Sign in'}
+            </Text>
           )}
         </Pressable>
-        
-        <Pressable 
-          style={{ marginTop: 16, alignItems: 'center' }} 
+
+        <Pressable
+          style={{ marginTop: 16, alignItems: 'center' }}
           onPress={() => setIsRegistering(!isRegistering)}
         >
           <Text style={{ color: colors.accent, fontWeight: '500' }}>
-            {isRegistering ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
+            {isRegistering
+              ? 'Already have an account? Sign in'
+              : 'Need an account? Sign up'}
           </Text>
         </Pressable>
 
