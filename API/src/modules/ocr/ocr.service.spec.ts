@@ -126,6 +126,44 @@ describe('OcrService', () => {
       ]);
       mockPrisma.ocrJob.count.mockResolvedValue(3);
 
+      mockPrisma.relationshipMatch.findMany.mockImplementation(async ({ where }) => {
+        const jobs = where.incomingOcrJobId?.in || [where.incomingOcrJobId];
+        const matches = [];
+        if (jobs.includes('job-2')) {
+          matches.push({
+            id: 'match-1',
+            incomingOcrJobId: 'job-2',
+            matchedContactId: 'contact-1',
+            matchConfidence: new Decimal('0.910'),
+            matchSignals: { email: true },
+            userDecision: null,
+            decidedById: null,
+            decidedAt: null,
+            createdAt: new Date('2026-06-01T11:30:00.000Z'),
+          });
+        }
+        if (jobs.includes('job-3')) {
+          matches.push({
+            id: 'match-2',
+            incomingOcrJobId: 'job-3',
+            matchedContactId: 'missing-contact',
+            matchConfidence: new Decimal('0.800'),
+            matchSignals: {},
+            userDecision: 'new',
+            decidedById: 'user-1',
+            decidedAt: new Date('2026-06-01T11:45:00.000Z'),
+            createdAt: new Date('2026-06-01T11:40:00.000Z'),
+          });
+        }
+        return matches;
+      });
+      mockPrisma.contact.findMany.mockImplementation(async ({ where }) => {
+        if (where.id?.in?.includes('contact-1')) {
+          return [{ id: 'contact-1', fullName: 'John Smith', company: 'Acme Corp' }];
+        }
+        return [];
+      });
+
       const result = await service.list(user, {});
 
       expect(mockPrisma.ocrJob.findMany).toHaveBeenCalledWith(
@@ -133,10 +171,11 @@ describe('OcrService', () => {
           skip: 0,
           take: 20,
           include: { cardImage: true },
+          where: expect.objectContaining({ submittedById: user.id }),
         }),
       );
-      expect(mockPrisma.relationshipMatch.findMany).not.toHaveBeenCalled();
-      expect(mockPrisma.contact.findMany).not.toHaveBeenCalled();
+      // enrichJobs is called once for the entire list
+      expect(mockPrisma.relationshipMatch.findMany).toHaveBeenCalledTimes(1);
 
       expect(result.total).toBe(3);
       expect(result.items).toHaveLength(3);
@@ -215,12 +254,34 @@ describe('OcrService', () => {
         ],
       });
 
+      mockPrisma.relationshipMatch.findMany.mockResolvedValue([
+        {
+          id: 'match-1',
+          incomingOcrJobId: 'job-1',
+          matchedContactId: 'contact-1',
+          matchConfidence: new Decimal('0.880'),
+          matchSignals: { phone: true },
+          userDecision: null,
+          decidedById: null,
+          decidedAt: null,
+          createdAt: new Date('2026-06-01T11:30:00.000Z'),
+        },
+      ]);
+      mockPrisma.contact.findMany.mockResolvedValue([
+        { id: 'contact-1', fullName: 'Jane Existing', company: null }
+      ]);
+
       const job = await service.getById(user, 'job-1');
 
-      expect(mockPrisma.ocrJob.findFirst).toHaveBeenCalledWith({
-        include: { cardImage: true },
+      expect(mockPrisma.ocrJob.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'job-1', submittedById: user.id }),
+          include: { cardImage: true },
+        }),
+      );
+      expect(mockPrisma.relationshipMatch.findMany).toHaveBeenCalledWith({
+        where: { incomingOcrJobId: { in: ['job-1'] } },
       });
-      expect(mockPrisma.relationshipMatch.findMany).not.toHaveBeenCalled();
       expect(job.matches).toEqual([
         expect.objectContaining({
           matchedContactName: 'Jane Existing',

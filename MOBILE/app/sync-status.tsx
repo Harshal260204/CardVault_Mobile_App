@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { formatCaptureMode, formatEncounterType } from '@/lib/format';
 import { drainSyncQueue, refreshSyncState } from '@/lib/sync/sync-service';
 import { useSyncStore } from '@/stores/sync-store';

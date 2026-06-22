@@ -1,13 +1,41 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, {
+  useCallback,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
+import { BackHandler, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
+import PagerView, {
+  PagerViewOnPageSelectedEvent,
+} from 'react-native-pager-view';
 
-import { useThemeColors } from '@/hooks/useThemeColors';
-import { formatCaptureMode, formatLeadLabel } from '@/lib/format';
-import type {
-  CaptureMode,
-  EventSessionRecord,
-  LeadQualifier,
-} from '@/lib/types';
+import { Button } from '@/components/Button';
+import { StepProgress } from '@/components/StepProgress';
+import { useThemeColors } from '@/theme/useThemeColors';
+import { getApiErrorMessage } from '@/lib/api-client';
+import type { CaptureMode, EventSessionRecord, LeadQualifier } from '@/lib/types';
+import { randomUuid } from '@/lib/uuid';
+import { useContactSaveStore } from '@/stores/contact-save-store';
+import { useSessionStore } from '@/stores/session-store';
+import { space } from '@/tokens/spacing';
+import { haptics } from '@/utils/haptics';
+import { focusField } from '@/utils/a11y';
+
+import { ClassificationStep } from '@/screens/contact-form/ClassificationStep';
+import { CONTACT_STEP_NAMES } from '@/screens/contact-form/constants';
+import { ContactInfoStep } from '@/screens/contact-form/ContactInfoStep';
+import { IdentityStep } from '@/screens/contact-form/IdentityStep';
+import { NotesStep } from '@/screens/contact-form/NotesStep';
+import {
+  ContactFieldErrors,
+  ContactFormField,
+  STEP_FIELDS,
+  contactWizardReducer,
+  initialContactWizardState,
+  validateSingleField,
+  validateStepFields,
+} from '@/screens/contact-form/state';
 
 export interface ContactFormValues {
   fullName: string;
@@ -25,475 +53,355 @@ export interface ContactFormValues {
   leadQualifier?: LeadQualifier;
 }
 
+export interface ContactFormSubmitPayload {
+  fullName: string;
+  company?: string;
+  title?: string;
+  emails?: string[];
+  phones?: string[];
+  website?: string;
+  linkedinUrl?: string;
+  leadNote?: string;
+  followUpDate?: string;
+  notes?: string;
+  captureMode?: CaptureMode;
+  eventSessionId?: string;
+  leadQualifier?: LeadQualifier;
+}
+
 interface ContactFormProps {
   initialValues: ContactFormValues;
   sessions: EventSessionRecord[];
-  isSubmitting?: boolean;
   submitLabel: string;
-  onSubmit: (payload: {
-    fullName: string;
-    company?: string;
-    title?: string;
-    emails?: string[];
-    phones?: string[];
-    website?: string;
-    linkedinUrl?: string;
-    leadNote?: string;
-    followUpDate?: string;
-    notes?: string;
-    captureMode?: CaptureMode;
-    eventSessionId?: string;
-    leadQualifier?: LeadQualifier;
-  }) => void;
+  showSaveAndAddAnother?: boolean;
+  onSubmit: (
+    payload: ContactFormSubmitPayload,
+    meta: { addAnother: boolean },
+  ) => Promise<void> | void;
 }
 
-const LEAD_OPTIONS: (LeadQualifier | 'unqualified')[] = [
-  'unqualified',
-  'hot',
-  'warm',
-  'cold',
-];
-const CAPTURE_OPTIONS: CaptureMode[] = [
-  'visitor',
-  'exhibitor',
-  'quick_capture',
-  'legacy',
-];
+function mapInitialValues(
+  initial: ContactFormValues,
+): Partial<ReturnType<typeof initialContactWizardState>> {
+  const firstEmail =
+    initial.emailsText
+      .split(/[\n,;]+/)
+      .map((item) => item.trim())
+      .find(Boolean) ?? '';
+  const firstPhone =
+    initial.phonesText
+      .split(/[\n,;]+/)
+      .map((item) => item.trim())
+      .find(Boolean) ?? '';
+
+  const mergedNotes = [initial.notes, initial.leadNote].filter(Boolean).join('\n\n');
+
+  return {
+    fullName: initial.fullName,
+    title: initial.title,
+    company: initial.company,
+    email: firstEmail,
+    phone: firstPhone,
+    website: initial.website,
+    linkedinUrl: initial.linkedinUrl,
+    notes: mergedNotes,
+    leadQualifier: initial.leadQualifier ?? 'warm',
+    eventSessionId: initial.eventSessionId,
+    captureMode: initial.captureMode,
+  };
+}
+
+function buildSubmitPayload(
+  state: ReturnType<typeof initialContactWizardState>,
+  sessions: EventSessionRecord[],
+): ContactFormSubmitPayload {
+  const selectedSession = sessions.find(
+    (session) => session.id === state.eventSessionId,
+  );
+  const tagPrefix =
+    state.tags.length > 0 ? `Tags: ${state.tags.join(', ')}\n\n` : '';
+  const notesBody = state.notes.trim();
+  const notes = `${tagPrefix}${notesBody}`.trim();
+
+  return {
+    fullName: state.fullName.trim(),
+    company: state.company.trim() || undefined,
+    title: state.title.trim() || undefined,
+    emails: state.email.trim() ? [state.email.trim()] : undefined,
+    phones: state.phone.trim() ? [state.phone.trim()] : undefined,
+    website: state.website.trim() || undefined,
+    linkedinUrl: state.linkedinUrl.trim() || undefined,
+    notes: notes || undefined,
+    captureMode: selectedSession?.mode ?? state.captureMode,
+    eventSessionId: selectedSession?.id,
+    leadQualifier: state.leadQualifier || undefined,
+  };
+}
 
 export function ContactForm({
   initialValues,
   sessions,
-  isSubmitting,
   submitLabel,
+  showSaveAndAddAnother = false,
   onSubmit,
 }: ContactFormProps) {
   const colors = useThemeColors();
-  const [fullName, setFullName] = useState(initialValues.fullName);
-  const [company, setCompany] = useState(initialValues.company);
-  const [title, setTitle] = useState(initialValues.title);
-  const [emailsText, setEmailsText] = useState(initialValues.emailsText);
-  const [phonesText, setPhonesText] = useState(initialValues.phonesText);
-  const [website, setWebsite] = useState(initialValues.website);
-  const [linkedinUrl, setLinkedinUrl] = useState(initialValues.linkedinUrl);
-  const [leadNote, setLeadNote] = useState(initialValues.leadNote);
-  const [followUpDate, setFollowUpDate] = useState(initialValues.followUpDate);
-  const [notes, setNotes] = useState(initialValues.notes);
-  const [captureMode, setCaptureMode] = useState<CaptureMode>(
-    initialValues.captureMode,
-  );
-  const [eventSessionId, setEventSessionId] = useState<string | undefined>(
-    initialValues.eventSessionId,
-  );
-  const [leadQualifier, setLeadQualifier] = useState<LeadQualifier | undefined>(
-    initialValues.leadQualifier,
+  const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const startSave = useContactSaveStore((s) => s.startSave);
+  const markSynced = useContactSaveStore((s) => s.markSynced);
+  const removeSave = useContactSaveStore((s) => s.removeSave);
+
+  const pagerRef = useRef<PagerView>(null);
+  const step0Ref = useRef<RNTextInput>(null);
+  const step1Ref = useRef<RNTextInput>(null);
+  const step3Ref = useRef<RNTextInput>(null);
+
+  const [step, setStep] = useState(0);
+  const [errors, setErrors] = useState<ContactFieldErrors>({});
+  const [saveError, setSaveError] = useState<string | undefined>();
+  const [isSaving, setIsSaving] = useState(false);
+
+  const resetState = useMemo(
+    () =>
+      initialContactWizardState({
+        ...mapInitialValues(initialValues),
+        eventSessionId: initialValues.eventSessionId ?? activeSessionId,
+      }),
+    [activeSessionId, initialValues],
   );
 
-  const selectedSession = useMemo(
-    () => sessions.find((session) => session.id === eventSessionId),
-    [sessions, eventSessionId],
+  const [state, dispatch] = useReducer(contactWizardReducer, resetState);
+
+  const goToStep = useCallback((nextStep: number) => {
+    const clamped = Math.max(0, Math.min(CONTACT_STEP_NAMES.length - 1, nextStep));
+    setStep(clamped);
+    setErrors({});
+    setSaveError(undefined);
+    pagerRef.current?.setPage(clamped);
+
+    const stepRefs = [step0Ref, step1Ref, null, step3Ref] as const;
+    const fieldRef = stepRefs[clamped];
+    if (fieldRef) {
+      focusField(fieldRef);
+    }
+  }, []);
+
+  const handlePageSelected = useCallback(
+    (event: PagerViewOnPageSelectedEvent) => {
+      setStep(event.nativeEvent.position);
+      setErrors({});
+    },
+    [],
   );
 
-  const submit = () => {
-    const normalizedFullName = fullName.trim();
-    if (!normalizedFullName) {
+  React.useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step > 0) {
+        goToStep(step - 1);
+        return true;
+      }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [goToStep, step]);
+
+  const handleBlurField = useCallback(
+    (field: ContactFormField) => {
+      const message = validateSingleField(field, state);
+      setErrors((current) => {
+        const next = { ...current };
+        if (message) {
+          next[field] = message;
+        } else {
+          delete next[field];
+        }
+        return next;
+      });
+    },
+    [state],
+  );
+
+  const handleNext = useCallback(() => {
+    const stepErrors = validateStepFields(step, state);
+    if (Object.keys(stepErrors).length > 0) {
+      setErrors(stepErrors);
+      void haptics.warning();
       return;
     }
+    goToStep(step + 1);
+  }, [goToStep, state, step]);
 
-    onSubmit({
-      fullName: normalizedFullName,
-      company: company.trim() || undefined,
-      title: title.trim() || undefined,
-      emails: parseList(emailsText),
-      phones: parseList(phonesText),
-      website: website.trim() || undefined,
-      linkedinUrl: linkedinUrl.trim() || undefined,
-      leadNote: leadNote.trim() || undefined,
-      followUpDate: followUpDate.trim() || undefined,
-      notes: notes.trim() || undefined,
-      captureMode: selectedSession?.mode ?? captureMode,
-      eventSessionId: selectedSession?.id,
-      leadQualifier,
-    });
-  };
+  const handleSave = useCallback(
+    async (addAnother: boolean) => {
+      if (isSaving) {
+        return;
+      }
+
+      const identityErrors = validateStepFields(0, state);
+      if (Object.keys(identityErrors).length > 0) {
+        setErrors(identityErrors);
+        goToStep(0);
+        return;
+      }
+
+      setIsSaving(true);
+      setSaveError(undefined);
+
+      const payload = buildSubmitPayload(state, sessions);
+      const tempId = randomUuid();
+
+      startSave(tempId, payload.fullName);
+      await haptics.success();
+
+      try {
+        await onSubmit(payload, { addAnother });
+        markSynced(tempId);
+
+        if (addAnother) {
+          dispatch({ type: 'RESET', payload: resetState });
+          goToStep(0);
+        }
+      } catch (error) {
+        removeSave(tempId);
+        setSaveError(getApiErrorMessage(error));
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [
+      goToStep,
+      isSaving,
+      markSynced,
+      onSubmit,
+      removeSave,
+      resetState,
+      sessions,
+      startSave,
+      state,
+    ],
+  );
+
+  const visibleErrors = useMemo(() => {
+    const allowed = new Set(STEP_FIELDS[step] ?? []);
+    return Object.fromEntries(
+      Object.entries(errors).filter(([field]) =>
+        allowed.has(field as ContactFormField),
+      ),
+    ) as ContactFieldErrors;
+  }, [errors, step]);
 
   return (
-    <View style={styles.form}>
-      <Text style={[styles.label, { color: colors.text }]}>Full name</Text>
-      <TextInput
-        value={fullName}
-        onChangeText={setFullName}
-        placeholder="Ashok Badjatiya"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
+    <View style={styles.root}>
+      <StepProgress
+        currentStep={step}
+        totalSteps={CONTACT_STEP_NAMES.length}
+        stepNames={CONTACT_STEP_NAMES}
       />
 
-      <Text style={[styles.label, { color: colors.text }]}>Company</Text>
-      <TextInput
-        value={company}
-        onChangeText={setCompany}
-        placeholder="Company"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-      />
-
-      <Text style={[styles.label, { color: colors.text }]}>Title</Text>
-      <TextInput
-        value={title}
-        onChangeText={setTitle}
-        placeholder="Managing Director"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-      />
-
-      <Text style={[styles.label, { color: colors.text }]}>Event</Text>
-      <View style={styles.chipRow}>
-        <Pressable
-          style={[
-            styles.chip,
-            { borderColor: colors.border, backgroundColor: colors.inputBg },
-            !eventSessionId && styles.chipActive,
-          ]}
-          onPress={() => setEventSessionId(undefined)}
-        >
-          <Text
-            style={[
-              styles.chipText,
-              { color: colors.text },
-              !eventSessionId && styles.chipTextActive,
-            ]}
-          >
-            Standalone
-          </Text>
-        </Pressable>
-        {sessions.map((session) => {
-          const selected = session.id === eventSessionId;
-          return (
-            <Pressable
-              key={session.id}
-              style={[
-                styles.chip,
-                { borderColor: colors.border, backgroundColor: colors.inputBg },
-                selected && styles.chipActive,
-              ]}
-              onPress={() => {
-                setEventSessionId(session.id);
-                setCaptureMode(session.mode);
-              }}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  { color: colors.text },
-                  selected && styles.chipTextActive,
-                ]}
-              >
-                {session.name}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Text style={[styles.label, { color: colors.text }]}>Category</Text>
-      {selectedSession ? (
-        <View
-          style={[
-            styles.readonlyCard,
-            { backgroundColor: colors.inputBg, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.readonlyText, { color: colors.text }]}>
-            {formatCaptureMode(selectedSession.mode)}
-          </Text>
-          <Text style={[styles.readonlyHint, { color: colors.muted }]}>
-            Matched to the selected event
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.chipRow}>
-          {CAPTURE_OPTIONS.map((mode) => {
-            const selected = mode === captureMode;
-            return (
-              <Pressable
-                key={mode}
-                style={[
-                  styles.chip,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.inputBg,
-                  },
-                  selected && styles.chipActive,
-                ]}
-                onPress={() => setCaptureMode(mode)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    { color: colors.text },
-                    selected && styles.chipTextActive,
-                  ]}
-                >
-                  {formatCaptureMode(mode)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      <Text style={[styles.label, { color: colors.text }]}>Lead status</Text>
-      <View style={styles.chipRow}>
-        {LEAD_OPTIONS.map((option) => {
-          const selected =
-            (option === 'unqualified' ? undefined : option) === leadQualifier;
-          return (
-            <Pressable
-              key={option}
-              style={[
-                styles.chip,
-                { borderColor: colors.border, backgroundColor: colors.inputBg },
-                selected && styles.chipActive,
-              ]}
-              onPress={() =>
-                setLeadQualifier(option === 'unqualified' ? undefined : option)
-              }
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  { color: colors.text },
-                  selected && styles.chipTextActive,
-                ]}
-              >
-                {option === 'unqualified'
-                  ? 'Unqualified'
-                  : formatLeadLabel(option)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Text style={[styles.label, { color: colors.text }]}>Emails</Text>
-      <TextInput
-        value={emailsText}
-        onChangeText={setEmailsText}
-        placeholder="name@company.com, alt@company.com"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          styles.multiline,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-        multiline
-      />
-
-      <Text style={[styles.label, { color: colors.text }]}>Phones</Text>
-      <TextInput
-        value={phonesText}
-        onChangeText={setPhonesText}
-        placeholder="+91 9999999999, +91 8888888888"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          styles.multiline,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-        multiline
-      />
-
-      <Text style={[styles.label, { color: colors.text }]}>Website</Text>
-      <TextInput
-        value={website}
-        onChangeText={setWebsite}
-        placeholder="https://company.com"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-      />
-
-      <Text style={[styles.label, { color: colors.text }]}>LinkedIn</Text>
-      <TextInput
-        value={linkedinUrl}
-        onChangeText={setLinkedinUrl}
-        placeholder="https://linkedin.com/in/name"
-        placeholderTextColor={colors.placeholder}
-        autoCapitalize="none"
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-      />
-
-      <Text style={[styles.label, { color: colors.text }]}>Follow-up date</Text>
-      <TextInput
-        value={followUpDate}
-        onChangeText={setFollowUpDate}
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-      />
-
-      <Text style={[styles.label, { color: colors.text }]}>Lead note</Text>
-      <TextInput
-        value={leadNote}
-        onChangeText={setLeadNote}
-        placeholder="Follow-up context or next step"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          styles.notes,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-        multiline
-      />
-
-      <Text style={[styles.label, { color: colors.text }]}>Notes</Text>
-      <TextInput
-        value={notes}
-        onChangeText={setNotes}
-        placeholder="Notes about the lead"
-        placeholderTextColor={colors.placeholder}
-        style={[
-          styles.input,
-          styles.notes,
-          {
-            backgroundColor: colors.inputBg,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-        multiline
-      />
-
-      <Pressable
-        style={[
-          styles.submitButton,
-          isSubmitting && styles.submitButtonDisabled,
-        ]}
-        onPress={submit}
-        disabled={isSubmitting}
+      <PagerView
+        ref={pagerRef}
+        style={styles.pager}
+        initialPage={0}
+        onPageSelected={handlePageSelected}
+        overdrag
       >
-        <Text style={styles.submitButtonText}>
-          {isSubmitting ? 'Saving...' : submitLabel}
-        </Text>
-      </Pressable>
+        <View key="identity" style={styles.page}>
+          <IdentityStep
+            state={state}
+            dispatch={dispatch}
+            errors={visibleErrors}
+            onBlurField={handleBlurField}
+            firstFieldRef={step0Ref}
+            stepActive={step === 0}
+          />
+        </View>
+        <View key="contact" style={styles.page}>
+          <ContactInfoStep
+            state={state}
+            dispatch={dispatch}
+            errors={visibleErrors}
+            onBlurField={handleBlurField}
+            firstFieldRef={step1Ref}
+            stepActive={step === 1}
+          />
+        </View>
+        <View key="classification" style={styles.page}>
+          <ClassificationStep
+            state={state}
+            dispatch={dispatch}
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+          />
+        </View>
+        <View key="notes" style={styles.page}>
+          <NotesStep
+            state={state}
+            dispatch={dispatch}
+            errors={visibleErrors}
+            onBlurField={handleBlurField}
+            firstFieldRef={step3Ref}
+            stepActive={step === 3}
+            onSave={() => handleSave(false)}
+            onSaveAndAddAnother={
+              showSaveAndAddAnother ? () => handleSave(true) : undefined
+            }
+            isSaving={isSaving}
+            saveError={saveError}
+            submitLabel={submitLabel}
+            showSaveAndAddAnother={showSaveAndAddAnother}
+          />
+        </View>
+      </PagerView>
+
+      {step < 3 ? (
+        <View style={[styles.footer, { backgroundColor: colors.surface }]}>
+          {step > 0 ? (
+            <View style={styles.footerButton}>
+              <Button
+                variant="secondary"
+                size="lg"
+                label="Back"
+                onPress={() => goToStep(step - 1)}
+                fullWidth
+                accessibilityLabel="Go to previous step"
+              />
+            </View>
+          ) : null}
+          <View style={styles.footerButton}>
+            <Button
+              variant="primary"
+              size="lg"
+              label="Next"
+              onPress={handleNext}
+              fullWidth
+              accessibilityLabel="Continue to next step"
+            />
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function parseList(value: string): string[] | undefined {
-  const items = value
-    .split(/[\n,;]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return items.length ? items : undefined;
-}
-
 const styles = StyleSheet.create({
-  form: { gap: 8 },
-  label: { fontSize: 14, fontWeight: '600', marginTop: 4 },
-  input: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  root: {
+    flex: 1,
+    minHeight: 520,
   },
-  multiline: {
-    minHeight: 78,
-    textAlignVertical: 'top',
+  pager: {
+    flex: 1,
   },
-  notes: {
-    minHeight: 110,
-    textAlignVertical: 'top',
+  page: {
+    flex: 1,
   },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  footer: {
+    flexDirection: 'row',
+    gap: space[3],
+    paddingHorizontal: space[4],
+    paddingTop: space[3],
+    paddingBottom: space[4],
   },
-  chipActive: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
-  },
-  chipText: {
-    fontSize: 13,
-  },
-  chipTextActive: {
-    color: '#fff',
-  },
-  readonlyCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-  },
-  readonlyText: { fontSize: 16, fontWeight: '600' },
-  readonlyHint: { marginTop: 4, fontSize: 12 },
-  submitButton: {
-    backgroundColor: '#1E2D4A',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    textAlign: 'center',
-    fontSize: 16,
+  footerButton: {
+    flex: 1,
   },
 });

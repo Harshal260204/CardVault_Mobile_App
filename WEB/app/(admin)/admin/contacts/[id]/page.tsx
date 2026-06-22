@@ -72,7 +72,10 @@ export default function ContactDetailPage() {
           }}
         />
         <div className="text-center">
-          <Link href="/admin/contacts" className="text-sm text-brand-600 hover:underline">
+          <Link
+            href="/admin/contacts"
+            className="text-sm text-brand-600 hover:underline"
+          >
             Back to contacts
           </Link>
         </div>

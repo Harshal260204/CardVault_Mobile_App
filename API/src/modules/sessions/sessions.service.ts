@@ -13,6 +13,7 @@ import { CreateSessionDto } from './dto/create-session.dto';
 import { ListSessionsQueryDto } from './dto/list-sessions-query.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { toSessionDto, type EventSessionDto } from './sessions.mapper';
+import { getOwnershipFilter } from '../../common/utils/ownership.util';
 
 @Injectable()
 export class SessionsService {
@@ -23,6 +24,7 @@ export class SessionsService {
 
   private orgWhere(user: RequestUser): Prisma.EventSessionWhereInput {
     return {
+      ...getOwnershipFilter(user, 'createdById'),
       deletedAt: null,
     };
   }

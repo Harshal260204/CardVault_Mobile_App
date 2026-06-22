@@ -1,7 +1,7 @@
 'use client';
 
 import { Users as UsersIcon, Plus, MoreHorizontal } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
+
 import { useEffect, useState, Suspense } from 'react';
 
 import { DataTable, type DataTableColumn } from '@/components/admin/data-table';
@@ -13,10 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Modal, ConfirmDialog } from '@/components/ui/modal';
-import {
-  useDeleteOrgUser,
-  useUpdateOrgUser,
-} from '@/hooks/use-admin';
+import { useDeleteOrgUser, useUpdateOrgUser } from '@/hooks/use-admin';
 import { useOrgUsers, useCreateOrgUser } from '@/hooks/use-org-users';
 import { formatRoleLabel, isPlatformSuperAdmin } from '@/lib/roles';
 import type { OrgUserRecord, UserRole } from '@/lib/types';

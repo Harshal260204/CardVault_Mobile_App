@@ -12,16 +12,13 @@ import type {
   DashboardStats,
   EventSessionRecord,
   ExportJobRecord,
-  HealthStatus,
+
   LoginResponse,
-  OcrJobRecord,
   OrgUserRecord,
   PaginatedList,
-
   UserProfile,
   UserRole,
 } from '@/lib/types';
-import type { CaptureMode } from '@/lib/types';
 import type { ContactSearchParams } from '@/lib/validation';
 
 export interface ApiClientConfig {
@@ -127,7 +124,6 @@ export function createApiClient(config: ApiClientConfig): AxiosInstance {
   return client;
 }
 
-
 export async function login(
   client: AxiosInstance,
   email: string,
@@ -186,7 +182,6 @@ export async function deleteContact(
   return data.data;
 }
 
-
 export async function closeSession(
   client: AxiosInstance,
   id: string,
@@ -196,7 +191,6 @@ export async function closeSession(
   );
   return data.data;
 }
-
 
 export async function fetchSessions(
   client: AxiosInstance,
@@ -261,10 +255,6 @@ export async function fetchMe(client: AxiosInstance): Promise<UserProfile> {
   }
   return data.data;
 }
-
-
-
-
 
 export async function mergeContacts(
   client: AxiosInstance,
@@ -391,7 +381,6 @@ export async function deleteOrgUser(
   return data.data;
 }
 
-
 export async function fetchLeadFunnel(
   client: AxiosInstance,
 ): Promise<{ hot: number; warm: number; cold: number; unqualified: number }> {
@@ -415,9 +404,7 @@ export async function fetchEncounterTypeAnalytics(
   return data.data;
 }
 
-export async function fetchSessionAnalytics(
-  client: AxiosInstance,
-): Promise<
+export async function fetchSessionAnalytics(client: AxiosInstance): Promise<
   Array<{
     id: string;
     name: string;
@@ -462,7 +449,5 @@ export async function fetchPlatformAnalytics(client: AxiosInstance): Promise<{
   >('/analytics/platform');
   return data.data;
 }
-
-
 
 export { axios };

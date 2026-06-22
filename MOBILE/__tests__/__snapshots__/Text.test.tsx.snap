@@ -1,0 +1,164 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Text component typography variants renders body variant correctly 1`] = `
+<Text
+  style={
+    [
+      {
+        "color": "#10131A",
+        "fontFamily": "Inter_400Regular",
+        "fontSize": 16,
+        "letterSpacing": 0,
+        "lineHeight": 24,
+      },
+      undefined,
+    ]
+  }
+>
+  body
+   text
+</Text>
+`;
+
+exports[`Text component typography variants renders bodyStrong variant correctly 1`] = `
+<Text
+  style={
+    [
+      {
+        "color": "#10131A",
+        "fontFamily": "Inter_600SemiBold",
+        "fontSize": 16,
+        "letterSpacing": 0,
+        "lineHeight": 24,
+      },
+      undefined,
+    ]
+  }
+>
+  bodyStrong
+   text
+</Text>
+`;
+
+exports[`Text component typography variants renders caption variant correctly 1`] = `
+<Text
+  style={
+    [
+      {
+        "color": "#10131A",
+        "fontFamily": "Inter_400Regular",
+        "fontSize": 14,
+        "letterSpacing": 0,
+        "lineHeight": 20,
+      },
+      undefined,
+    ]
+  }
+>
+  caption
+   text
+</Text>
+`;
+
+exports[`Text component typography variants renders display variant correctly 1`] = `
+<Text
+  style={
+    [
+      {
+        "color": "#10131A",
+        "fontFamily": "Inter_800ExtraBold",
+        "fontSize": 48,
+        "letterSpacing": -0.5,
+        "lineHeight": 56,
+      },
+      undefined,
+    ]
+  }
+>
+  display
+   text
+</Text>
+`;
+
+exports[`Text component typography variants renders h1 variant correctly 1`] = `
+<Text
+  accessibilityRole="header"
+  style={
+    [
+      {
+        "color": "#10131A",
+        "fontFamily": "Inter_800ExtraBold",
+        "fontSize": 32,
+        "letterSpacing": -0.5,
+        "lineHeight": 40,
+      },
+      undefined,
+    ]
+  }
+>
+  h1
+   text
+</Text>
+`;
+
+exports[`Text component typography variants renders h2 variant correctly 1`] = `
+<Text
+  accessibilityRole="header"
+  style={
+    [
+      {
+        "color": "#10131A",
+        "fontFamily": "Inter_700Bold",
+        "fontSize": 24,
+        "letterSpacing": -0.5,
+        "lineHeight": 32,
+      },
+      undefined,
+    ]
+  }
+>
+  h2
+   text
+</Text>
+`;
+
+exports[`Text component typography variants renders h3 variant correctly 1`] = `
+<Text
+  accessibilityRole="header"
+  style={
+    [
+      {
+        "color": "#10131A",
+        "fontFamily": "Inter_700Bold",
+        "fontSize": 20,
+        "letterSpacing": -0.3,
+        "lineHeight": 28,
+      },
+      undefined,
+    ]
+  }
+>
+  h3
+   text
+</Text>
+`;
+
+exports[`Text component typography variants renders micro variant correctly 1`] = `
+<Text
+  style={
+    [
+      {
+        "color": "#10131A",
+        "fontFamily": "Inter_500Medium",
+        "fontSize": 12,
+        "letterSpacing": 0.5,
+        "lineHeight": 16,
+      },
+      undefined,
+    ]
+  }
+>
+  micro
+   text
+</Text>
+`;

@@ -127,7 +127,10 @@ export function Modal({
           className,
         )}
       >
-        <h3 id={titleId} className="mb-4 text-base font-semibold text-foreground">
+        <h3
+          id={titleId}
+          className="mb-4 text-base font-semibold text-foreground"
+        >
           {title}
         </h3>
         {children}

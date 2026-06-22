@@ -1,0 +1,641 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`TextInput component snapshots renders default state 1`] = `
+<View
+  style={
+    [
+      {
+        "marginBottom": 12,
+      },
+      undefined,
+    ]
+  }
+>
+  <View
+    style={
+      [
+        {
+          "paddingTop": 8,
+          "position": "relative",
+        },
+        false,
+        false,
+      ]
+    }
+  >
+    <View
+      pointerEvents="none"
+      style={
+        [
+          {
+            "left": 16,
+            "position": "absolute",
+            "top": 18,
+            "zIndex": 2,
+          },
+          {
+            "transform": [
+              {
+                "translateY": -26,
+              },
+              {
+                "scale": 0.875,
+              },
+            ],
+          },
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 4,
+          }
+        }
+      >
+        <Text
+          style={
+            [
+              {
+                "color": "#5B6270",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "letterSpacing": 0,
+                "lineHeight": 24,
+              },
+              {
+                "includeFontPadding": false,
+              },
+            ]
+          }
+        >
+          Email
+        </Text>
+      </View>
+    </View>
+    <View
+      pointerEvents="none"
+      style={
+        [
+          {
+            "borderRadius": 12,
+            "borderWidth": 2,
+            "bottom": 0,
+            "left": 0,
+            "position": "absolute",
+            "right": 0,
+            "top": 8,
+            "zIndex": 3,
+          },
+          {
+            "borderColor": "#2F5BB7",
+            "opacity": 0,
+          },
+        ]
+      }
+    />
+    <View
+      style={
+        [
+          {
+            "alignItems": "center",
+            "borderRadius": 12,
+            "flexDirection": "row",
+            "paddingHorizontal": 16,
+            "paddingVertical": 8,
+          },
+          {
+            "backgroundColor": "#F7F8FA",
+            "minHeight": 44,
+          },
+          false,
+          false,
+        ]
+      }
+    >
+      <TextInput
+        accessibilityLabel="Email"
+        accessibilityState={
+          {
+            "disabled": false,
+          }
+        }
+        editable={true}
+        multiline={false}
+        onBlur={[Function]}
+        onChangeText={[MockFunction]}
+        onFocus={[Function]}
+        placeholderTextColor="#9AA1AE"
+        style={
+          [
+            {
+              "flex": 1,
+              "margin": 0,
+              "minHeight": 24,
+              "padding": 0,
+            },
+            {
+              "color": "#10131A",
+              "fontFamily": "Inter_400Regular",
+              "fontSize": 16,
+              "lineHeight": 24,
+            },
+            false,
+          ]
+        }
+        value=""
+      />
+    </View>
+  </View>
+</View>
+`;
+
+exports[`TextInput component snapshots renders disabled state 1`] = `
+<View
+  style={
+    [
+      {
+        "marginBottom": 12,
+      },
+      undefined,
+    ]
+  }
+>
+  <View
+    style={
+      [
+        {
+          "paddingTop": 8,
+          "position": "relative",
+        },
+        false,
+        {
+          "opacity": 0.5,
+        },
+      ]
+    }
+  >
+    <View
+      pointerEvents="none"
+      style={
+        [
+          {
+            "left": 16,
+            "position": "absolute",
+            "top": 18,
+            "zIndex": 2,
+          },
+          {
+            "transform": [
+              {
+                "translateY": -26,
+              },
+              {
+                "scale": 0.875,
+              },
+            ],
+          },
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 4,
+          }
+        }
+      >
+        <Text
+          style={
+            [
+              {
+                "color": "#5B6270",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "letterSpacing": 0,
+                "lineHeight": 24,
+              },
+              {
+                "includeFontPadding": false,
+              },
+            ]
+          }
+        >
+          Email
+        </Text>
+      </View>
+    </View>
+    <View
+      pointerEvents="none"
+      style={
+        [
+          {
+            "borderRadius": 12,
+            "borderWidth": 2,
+            "bottom": 0,
+            "left": 0,
+            "position": "absolute",
+            "right": 0,
+            "top": 8,
+            "zIndex": 3,
+          },
+          {
+            "borderColor": "#2F5BB7",
+            "opacity": 0,
+          },
+        ]
+      }
+    />
+    <View
+      style={
+        [
+          {
+            "alignItems": "center",
+            "borderRadius": 12,
+            "flexDirection": "row",
+            "paddingHorizontal": 16,
+            "paddingVertical": 8,
+          },
+          {
+            "backgroundColor": "#F7F8FA",
+            "minHeight": 44,
+          },
+          {
+            "paddingBottom": 8,
+            "paddingTop": 16,
+          },
+          false,
+        ]
+      }
+    >
+      <TextInput
+        accessibilityLabel="Email"
+        accessibilityState={
+          {
+            "disabled": true,
+          }
+        }
+        editable={false}
+        multiline={false}
+        onBlur={[Function]}
+        onChangeText={[MockFunction]}
+        onFocus={[Function]}
+        placeholderTextColor="#9AA1AE"
+        style={
+          [
+            {
+              "flex": 1,
+              "margin": 0,
+              "minHeight": 24,
+              "padding": 0,
+            },
+            {
+              "color": "#10131A",
+              "fontFamily": "Inter_400Regular",
+              "fontSize": 16,
+              "lineHeight": 24,
+            },
+            false,
+          ]
+        }
+        value="employee@cardvault.local"
+      />
+    </View>
+  </View>
+</View>
+`;
+
+exports[`TextInput component snapshots renders error state 1`] = `
+<View
+  style={
+    [
+      {
+        "marginBottom": 12,
+      },
+      undefined,
+    ]
+  }
+>
+  <View
+    style={
+      [
+        {
+          "paddingTop": 8,
+          "position": "relative",
+        },
+        false,
+        false,
+      ]
+    }
+  >
+    <View
+      pointerEvents="none"
+      style={
+        [
+          {
+            "left": 16,
+            "position": "absolute",
+            "top": 18,
+            "zIndex": 2,
+          },
+          {
+            "transform": [
+              {
+                "translateY": -26,
+              },
+              {
+                "scale": 0.875,
+              },
+            ],
+          },
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 4,
+          }
+        }
+      >
+        <Text
+          style={
+            [
+              {
+                "color": "#B91C1C",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "letterSpacing": 0,
+                "lineHeight": 24,
+              },
+              {
+                "includeFontPadding": false,
+              },
+            ]
+          }
+        >
+          Email
+        </Text>
+      </View>
+    </View>
+    <View
+      pointerEvents="none"
+      style={
+        [
+          {
+            "borderRadius": 12,
+            "borderWidth": 2,
+            "bottom": 0,
+            "left": 0,
+            "position": "absolute",
+            "right": 0,
+            "top": 8,
+            "zIndex": 3,
+          },
+          {
+            "borderColor": "#B91C1C",
+            "opacity": 1,
+          },
+        ]
+      }
+    />
+    <View
+      style={
+        [
+          {
+            "alignItems": "center",
+            "borderRadius": 12,
+            "flexDirection": "row",
+            "paddingHorizontal": 16,
+            "paddingVertical": 8,
+          },
+          {
+            "backgroundColor": "#F7F8FA",
+            "minHeight": 44,
+          },
+          {
+            "paddingBottom": 8,
+            "paddingTop": 16,
+          },
+          false,
+        ]
+      }
+    >
+      <TextInput
+        accessibilityLabel="Email"
+        accessibilityState={
+          {
+            "disabled": false,
+          }
+        }
+        editable={true}
+        multiline={false}
+        onBlur={[Function]}
+        onChangeText={[MockFunction]}
+        onFocus={[Function]}
+        placeholderTextColor="#9AA1AE"
+        style={
+          [
+            {
+              "flex": 1,
+              "margin": 0,
+              "minHeight": 24,
+              "padding": 0,
+            },
+            {
+              "color": "#10131A",
+              "fontFamily": "Inter_400Regular",
+              "fontSize": 16,
+              "lineHeight": 24,
+            },
+            false,
+          ]
+        }
+        value="bad@"
+      />
+    </View>
+  </View>
+  <Text
+    accessibilityLiveRegion="assertive"
+    accessibilityRole="alert"
+    style={
+      [
+        {
+          "color": "#B91C1C",
+          "fontFamily": "Inter_400Regular",
+          "fontSize": 14,
+          "letterSpacing": 0,
+          "lineHeight": 20,
+        },
+        {
+          "marginLeft": 4,
+          "marginTop": 4,
+        },
+      ]
+    }
+  >
+    Enter a valid email address
+  </Text>
+</View>
+`;
+
+exports[`TextInput component snapshots renders focused state 1`] = `
+<View
+  style={
+    [
+      {
+        "marginBottom": 12,
+      },
+      undefined,
+    ]
+  }
+>
+  <View
+    style={
+      [
+        {
+          "paddingTop": 8,
+          "position": "relative",
+        },
+        false,
+        false,
+      ]
+    }
+  >
+    <View
+      pointerEvents="none"
+      style={
+        [
+          {
+            "left": 16,
+            "position": "absolute",
+            "top": 18,
+            "zIndex": 2,
+          },
+          {
+            "transform": [
+              {
+                "translateY": -26,
+              },
+              {
+                "scale": 0.875,
+              },
+            ],
+          },
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 4,
+          }
+        }
+      >
+        <Text
+          style={
+            [
+              {
+                "color": "#2F5BB7",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "letterSpacing": 0,
+                "lineHeight": 24,
+              },
+              {
+                "includeFontPadding": false,
+              },
+            ]
+          }
+        >
+          Email
+        </Text>
+      </View>
+    </View>
+    <View
+      pointerEvents="none"
+      style={
+        [
+          {
+            "borderRadius": 12,
+            "borderWidth": 2,
+            "bottom": 0,
+            "left": 0,
+            "position": "absolute",
+            "right": 0,
+            "top": 8,
+            "zIndex": 3,
+          },
+          {
+            "borderColor": "#2F5BB7",
+            "opacity": 1,
+          },
+        ]
+      }
+    />
+    <View
+      style={
+        [
+          {
+            "alignItems": "center",
+            "borderRadius": 12,
+            "flexDirection": "row",
+            "paddingHorizontal": 16,
+            "paddingVertical": 8,
+          },
+          {
+            "backgroundColor": "#F7F8FA",
+            "minHeight": 44,
+          },
+          {
+            "paddingBottom": 8,
+            "paddingTop": 16,
+          },
+          false,
+        ]
+      }
+    >
+      <TextInput
+        accessibilityLabel="Email"
+        accessibilityState={
+          {
+            "disabled": false,
+          }
+        }
+        editable={true}
+        multiline={false}
+        onBlur={[Function]}
+        onChangeText={[MockFunction]}
+        onFocus={[Function]}
+        placeholderTextColor="#9AA1AE"
+        style={
+          [
+            {
+              "flex": 1,
+              "margin": 0,
+              "minHeight": 24,
+              "padding": 0,
+            },
+            {
+              "color": "#10131A",
+              "fontFamily": "Inter_400Regular",
+              "fontSize": 16,
+              "lineHeight": 24,
+            },
+            false,
+          ]
+        }
+        value=""
+      />
+    </View>
+  </View>
+</View>
+`;

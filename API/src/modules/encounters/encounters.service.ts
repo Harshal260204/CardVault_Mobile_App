@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { RequestUser } from '../auth/auth.types';
 import { UpdateEncounterDto } from './dto/update-encounter.dto';
+import { getOwnershipFilter } from '../../common/utils/ownership.util';
 
 @Injectable()
 export class EncountersService {
@@ -11,6 +12,7 @@ export class EncountersService {
     const contact = await this.prisma.contact.findFirst({
       where: {
         id: contactId,
+        ...getOwnershipFilter(user, 'createdById'),
         deletedAt: null,
       },
     });
@@ -18,7 +20,7 @@ export class EncountersService {
       throw new NotFoundException('Contact not found');
     }
     const items = await this.prisma.contactEncounter.findMany({
-      where: { contactId },
+      where: { contactId, ...getOwnershipFilter(user, 'capturedById') },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
@@ -39,7 +41,7 @@ export class EncountersService {
 
   async update(user: RequestUser, id: string, dto: UpdateEncounterDto) {
     const encounter = await this.prisma.contactEncounter.findFirst({
-      where: { id },
+      where: { id, ...getOwnershipFilter(user, 'capturedById') },
     });
     if (!encounter) {
       throw new NotFoundException('Encounter not found');

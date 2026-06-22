@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { RequestUser } from '../auth/auth.types';
 import { StorageService } from '../../storage/storage.service';
+import { getOwnershipFilter } from '../../common/utils/ownership.util';
 
 @Injectable()
 export class ImagesService {
@@ -12,7 +13,7 @@ export class ImagesService {
 
   async getSignedUrl(user: RequestUser, imageId: string) {
     const image = await this.prisma.cardImage.findFirst({
-      where: { id: imageId },
+      where: { id: imageId, ...getOwnershipFilter(user, 'uploadedById') },
     });
     if (!image) {
       throw new NotFoundException('Image not found');

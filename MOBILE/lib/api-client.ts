@@ -4,6 +4,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 
+import { buildApiUrl } from '@/lib/api-config';
 import { captureLog } from '@/lib/capture-logger';
 import { API_BASE_PATH } from '@/lib/constants';
 import { submitOcrJobNative } from '@/lib/submit-ocr-upload';
@@ -488,6 +489,7 @@ export async function submitOcrJob(
     clientIdempotencyKey: string;
   },
 ): Promise<OcrJobRecord> {
+  // Multipart uploads use fetch/FileSystem — axios FormData fails on Android (ERR_NETWORK).
   return submitOcrJobNative(file, payload);
 }
 

@@ -30,8 +30,6 @@ export function formatLeadLabel(
   return qualifier.charAt(0).toUpperCase() + qualifier.slice(1);
 }
 
-
-
 /** e.g. "Jun 12, 2024" */
 export function formatDate(iso: string | Date): string {
   const d = typeof iso === 'string' ? new Date(iso) : iso;

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 import { createApiClient } from '@/lib/api-client';
 import { getApiHost, getAccessToken, setAccessToken } from '@/lib/api-config';
@@ -16,17 +17,51 @@ export function getApiBaseUrl(): string {
 let refreshToken: string | null = null;
 
 export async function loadStoredAuth(): Promise<UserProfile | null> {
-  const [access, refresh, userRaw] = await Promise.all([
-    AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN),
-    AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN),
-    AsyncStorage.getItem(STORAGE_KEYS.USER),
-  ]);
-  setAccessToken(access);
-  refreshToken = refresh;
-  if (!userRaw) return null;
   try {
+    let access = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+    let refresh = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+    let userRaw = await SecureStore.getItemAsync(STORAGE_KEYS.USER);
+
+    if (!access && !refresh && !userRaw) {
+      const [legacyAccess, legacyRefresh, legacyUser] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN),
+        AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN),
+        AsyncStorage.getItem(STORAGE_KEYS.USER),
+      ]);
+
+      if (legacyAccess || legacyRefresh || legacyUser) {
+        if (legacyAccess)
+          await SecureStore.setItemAsync(
+            STORAGE_KEYS.ACCESS_TOKEN,
+            legacyAccess,
+          );
+        if (legacyRefresh)
+          await SecureStore.setItemAsync(
+            STORAGE_KEYS.REFRESH_TOKEN,
+            legacyRefresh,
+          );
+        if (legacyUser)
+          await SecureStore.setItemAsync(STORAGE_KEYS.USER, legacyUser);
+
+        await AsyncStorage.multiRemove([
+          STORAGE_KEYS.ACCESS_TOKEN,
+          STORAGE_KEYS.REFRESH_TOKEN,
+          STORAGE_KEYS.USER,
+        ]);
+
+        access = legacyAccess;
+        refresh = legacyRefresh;
+        userRaw = legacyUser;
+      }
+    }
+
+    setAccessToken(access || null);
+    refreshToken = refresh || null;
+    if (!userRaw) return null;
+
     return JSON.parse(userRaw) as UserProfile;
-  } catch {
+  } catch (error) {
+    console.error('Error loading stored auth:', error);
     return null;
   }
 }
@@ -38,9 +73,9 @@ export const api = createApiClient({
   onTokensRefreshed: async (access, refresh) => {
     setAccessToken(access);
     refreshToken = refresh;
-    await AsyncStorage.multiSet([
-      [STORAGE_KEYS.ACCESS_TOKEN, access],
-      [STORAGE_KEYS.REFRESH_TOKEN, refresh],
+    await Promise.all([
+      SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, access),
+      SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, refresh),
     ]);
   },
   onUnauthorized: async () => {
@@ -56,20 +91,20 @@ export async function persistAuth(
 ): Promise<void> {
   setAccessToken(access);
   refreshToken = refresh;
-  await AsyncStorage.multiSet([
-    [STORAGE_KEYS.ACCESS_TOKEN, access],
-    [STORAGE_KEYS.REFRESH_TOKEN, refresh],
-    [STORAGE_KEYS.USER, JSON.stringify(user)],
+  await Promise.all([
+    SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, access),
+    SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, refresh),
+    SecureStore.setItemAsync(STORAGE_KEYS.USER, JSON.stringify(user)),
   ]);
 }
 
 export async function clearAuth(): Promise<void> {
   setAccessToken(null);
   refreshToken = null;
-  await AsyncStorage.multiRemove([
-    STORAGE_KEYS.ACCESS_TOKEN,
-    STORAGE_KEYS.REFRESH_TOKEN,
-    STORAGE_KEYS.USER,
+  await Promise.all([
+    SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN),
+    SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN),
+    SecureStore.deleteItemAsync(STORAGE_KEYS.USER),
   ]);
 }
 

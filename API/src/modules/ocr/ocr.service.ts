@@ -12,6 +12,7 @@ import {
   resolvePagination,
   toPaginatedResult,
 } from '../../common/utils/pagination';
+import { getOwnershipFilter } from '../../common/utils/ownership.util';
 import {
   DuplicateContactDetectedException,
   SessionClosedException,
@@ -65,6 +66,7 @@ export class OcrService {
       const session = await this.prisma.eventSession.findFirst({
         where: {
           id: dto.sessionId,
+          ...getOwnershipFilter(user, 'createdById'),
           deletedAt: null,
         },
       });
@@ -140,7 +142,7 @@ export class OcrService {
 
   async reprocess(user: RequestUser, jobId: string): Promise<OcrJobDto> {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id: jobId },
+      where: { id: jobId, ...getOwnershipFilter(user, 'submittedById') },
       include: { cardImage: true },
     });
     if (!job) {
@@ -175,6 +177,7 @@ export class OcrService {
       query.limit,
     );
     const where: Prisma.OcrJobWhereInput = {
+      ...getOwnershipFilter(user, 'submittedById'),
     };
 
     if (query.status) {
@@ -193,29 +196,32 @@ export class OcrService {
         where,
         skip,
         take,
+        include: { cardImage: true },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.ocrJob.count({ where }),
     ]);
 
-    const enriched = await Promise.all(items.map((job) => this.enrichJob(job)));
+    const enriched = await this.enrichJobs(items);
 
     return toPaginatedResult(enriched, total, page, limit);
   }
 
   async getById(user: RequestUser, id: string): Promise<OcrJobDto> {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id },
+      where: { id, ...getOwnershipFilter(user, 'submittedById') },
+      include: { cardImage: true },
     });
     if (!job) {
       throw new NotFoundException('OCR job not found');
     }
-    return this.enrichJob(job);
+    const enriched = await this.enrichJobs([job]);
+    return enriched[0];
   }
 
   async confirm(user: RequestUser, jobId: string, dto: ConfirmOcrDto) {
     const job = await this.prisma.ocrJob.findFirst({
-      where: { id: jobId },
+      where: { id: jobId, ...getOwnershipFilter(user, 'submittedById') },
     });
     if (!job) {
       throw new NotFoundException('OCR job not found');
@@ -356,13 +362,17 @@ export class OcrService {
     };
   }
 
-  private async enrichJob(
-    job: Prisma.OcrJobGetPayload<object>,
-  ): Promise<OcrJobDto> {
+  private async enrichJobs(
+    jobs: Prisma.OcrJobGetPayload<object>[],
+  ): Promise<OcrJobDto[]> {
+    if (!jobs.length) return [];
+    
+    const jobIds = jobs.map((j) => j.id);
     const matches = await this.prisma.relationshipMatch.findMany({
-      where: { incomingOcrJobId: job.id },
+      where: { incomingOcrJobId: { in: jobIds } },
     });
-    const contactIds = (matches || []).map((m) => m.matchedContactId);
+    
+    const contactIds = Array.from(new Set(matches.map((m) => m.matchedContactId)));
     const contacts = contactIds.length
       ? await this.prisma.contact.findMany({
           where: { id: { in: contactIds } },
@@ -371,12 +381,15 @@ export class OcrService {
       : [];
     const contactMap = new Map(contacts.map((c) => [c.id, c]));
 
-    return toOcrJobDto({
-      ...job,
-      matches: (matches || []).map((m) => ({
-        ...m,
-        matchedContact: contactMap.get(m.matchedContactId) ?? null,
-      })),
+    return jobs.map((job) => {
+      const jobMatches = matches.filter((m) => m.incomingOcrJobId === job.id);
+      return toOcrJobDto({
+        ...job,
+        matches: jobMatches.map((m) => ({
+          ...m,
+          matchedContact: contactMap.get(m.matchedContactId) ?? null,
+        })),
+      });
     });
   }
 

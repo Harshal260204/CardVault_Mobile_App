@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { formatEncounterType } from '@/lib/format';
 import type { EncounterType } from '@/lib/types';
 import { useSessionStore } from '@/stores/session-store';
