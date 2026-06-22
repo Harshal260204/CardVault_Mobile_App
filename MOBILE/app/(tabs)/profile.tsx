@@ -1,15 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useTheme } from '@/theme/ThemeProvider';
 
 import { api, clearAuth, getRefreshToken } from '@/lib/api';
 import { logout } from '@/lib/api-client';
@@ -17,7 +20,6 @@ import { COLORS } from '@/lib/constants';
 import { registerForPushNotifications } from '@/lib/push-notifications';
 import { useAuthStore } from '@/stores/auth-store';
 import { useSyncStore } from '@/stores/sync-store';
-import { useThemeStore } from '@/stores/theme-store';
 
 function getInitials(name: string): string {
   if (!name) return '??';
@@ -53,9 +55,10 @@ export default function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
 
-  const theme = useThemeStore((s) => s.theme);
-  const setTheme = useThemeStore((s) => s.setTheme);
-  const isDark = theme === 'dark';
+  const { mode, resolvedTheme, reduceHaptics, setReduceHaptics } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const themeModeLabel =
+    mode === 'system' ? 'System' : mode === 'dark' ? 'Dark' : 'Light';
 
   const me = useQuery({
     queryKey: ['me'],
@@ -175,11 +178,35 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionTitle, isDark && styles.textMutedDark]}>
             App Settings
           </Text>
+          <Pressable
+            style={[styles.notificationsBtn, isDark && styles.cardDark]}
+            onPress={() => router.push('/settings' as Href)}
+          >
+            <Ionicons
+              name="settings-outline"
+              size={18}
+              color={isDark ? '#94A3B8' : '#64748B'}
+              style={{ marginRight: 8 }}
+            />
+            <Text style={[styles.notificationsText, isDark && styles.textDark]}>
+              Settings
+            </Text>
+            <Text
+              style={[
+                styles.notificationsText,
+                isDark && styles.mutedTextDark,
+                { marginLeft: 'auto' },
+              ]}
+            >
+              {themeModeLabel}
+            </Text>
+          </Pressable>
+
           <View style={[styles.card, isDark && styles.cardDark]}>
             <View style={styles.detailRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons
-                  name={isDark ? 'moon-outline' : 'sunny-outline'}
+                  name="phone-portrait-outline"
                   size={18}
                   color={isDark ? '#94A3B8' : '#64748B'}
                   style={{ marginRight: 8 }}
@@ -187,47 +214,14 @@ export default function ProfileScreen() {
                 <Text
                   style={[styles.detailLabel, isDark && styles.mutedTextDark]}
                 >
-                  Theme Mode
+                  Reduce Haptics
                 </Text>
               </View>
-              <View style={[styles.themeRow, isDark && styles.themeRowDark]}>
-                <Pressable
-                  style={[
-                    styles.themeOption,
-                    theme === 'light' && styles.themeOptionActive,
-                  ]}
-                  onPress={() => setTheme('light')}
-                >
-                  <Text
-                    style={[
-                      styles.themeOptionText,
-                      theme === 'light' && styles.themeOptionTextActive,
-                      isDark && { color: '#94A3B8' },
-                      theme === 'light' && { color: '#ffffff' },
-                    ]}
-                  >
-                    Light
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.themeOption,
-                    theme === 'dark' && styles.themeOptionActive,
-                  ]}
-                  onPress={() => setTheme('dark')}
-                >
-                  <Text
-                    style={[
-                      styles.themeOptionText,
-                      theme === 'dark' && styles.themeOptionTextActive,
-                      isDark && { color: '#94A3B8' },
-                      theme === 'dark' && { color: '#ffffff' },
-                    ]}
-                  >
-                    Dark
-                  </Text>
-                </Pressable>
-              </View>
+              <Switch
+                accessibilityLabel="Reduce Haptics"
+                value={reduceHaptics}
+                onValueChange={setReduceHaptics}
+              />
             </View>
           </View>
 

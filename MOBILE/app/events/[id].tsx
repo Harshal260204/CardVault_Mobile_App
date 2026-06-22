@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 
 import SessionMemberAvatars from '@/components/SessionMemberAvatars';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { api } from '@/lib/api';
 import {
   fetchContacts,

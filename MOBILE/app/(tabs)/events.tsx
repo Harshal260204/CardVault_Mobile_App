@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { api } from '@/lib/api';
 import { fetchSessions, getApiErrorMessage } from '@/lib/api-client';
 import { formatCaptureMode } from '@/lib/format';

@@ -1,86 +1,226 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
+  FlatList,
+  ListRenderItem,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-import CameraScannerModal from '@/components/CameraScannerModal';
-import SessionMemberAvatars from '@/components/SessionMemberAvatars';
-import { useThemeColors } from '@/hooks/useThemeColors';
-import { api } from '@/lib/api';
+import { Badge } from '@/components/Badge';
+import { Card } from '@/components/Card';
+import { EmptyState } from '@/components/EmptyState';
+import { KPICard, KPI_CARD_WIDTH } from '@/components/KPICard';
+import { ScanIllustration } from '@/components/onboarding/illustrations';
+import ScanBottomSheet from '@/components/ScanBottomSheet';
+import { SessionCard, SESSION_CARD_WIDTH } from '@/components/SessionCard';
 import {
-  fetchContacts,
-  fetchSessions,
-  getApiErrorMessage,
-} from '@/lib/api-client';
-import { COLORS } from '@/lib/constants';
-import type { EventSessionRecord } from '@/lib/types';
+  SkeletonCard,
+  SkeletonKPICard,
+  SkeletonSessionCard,
+} from '@/components/Skeleton';
+import { Text } from '@/components/Text';
+import { useThemeColors } from '@/theme/useThemeColors';
+import { api } from '@/lib/api';
+import { fetchContacts, fetchSessions, getApiErrorMessage } from '@/lib/api-client';
+import {
+  formatLeadLabel,
+  formatRelativeTime,
+  initials,
+} from '@/lib/format';
+import type { ContactRecord, EventSessionRecord } from '@/lib/types';
 import { useAuthStore } from '@/stores/auth-store';
+import { useContactSaveStore } from '@/stores/contact-save-store';
 import { useSessionStore } from '@/stores/session-store';
 import { useSyncStore } from '@/stores/sync-store';
+import { stagger } from '@/tokens/motion';
+import { haptics } from '@/utils/haptics';
+import { pressScale, useFadeIn } from '@/utils/motion';
+import { radius, space } from '@/tokens/spacing';
+
+const KPI_SNAP_INTERVAL = KPI_CARD_WIDTH + space[4];
+const SESSION_SNAP_INTERVAL = SESSION_CARD_WIDTH + space[4];
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+function getGreeting(): string {
+  const hrs = new Date().getHours();
+  if (hrs < 12) return 'Good morning';
+  if (hrs < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function buildTrend(value: number): number[] {
+  return [
+    Math.max(value - 3, 0),
+    Math.max(value - 2, 0),
+    Math.max(value - 1, 0),
+    value,
+  ];
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.toDateString() === b.toDateString();
+}
+
+interface QuickAction {
+  key: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}
+
+interface ActivityFeedRowProps {
+  item: ContactRecord;
+  index: number;
+  syncCaption: string | undefined;
+  onPress: () => void;
+}
+
+function ActivityFeedRow({
+  item,
+  index,
+  syncCaption,
+  onPress,
+}: ActivityFeedRowProps) {
+  const colors = useThemeColors();
+  const entranceDelay = Math.min(index * stagger.step, stagger.max);
+  const fadeInStyle = useFadeIn(entranceDelay);
+
+  return (
+    <Animated.View style={fadeInStyle}>
+      <Card
+        elevation={1}
+        onPress={onPress}
+        style={styles.activityCard}
+        accessibilityLabel={`${item.fullName}, ${syncCaption ?? formatRelativeTime(item.createdAt)}`}
+      >
+        <View
+          style={[
+            styles.avatar,
+            {
+              backgroundColor: colors.isDark
+                ? colors.getElevationSurface(2)
+                : colors.tokens.primary[100],
+            },
+          ]}
+        >
+          <Text variant="caption" color={colors.primaryOnTint}>
+            {initials(item.fullName)}
+          </Text>
+        </View>
+        <View style={styles.activityBody}>
+          <Text variant="bodyStrong" color={colors.text} numberOfLines={2}>
+            {item.fullName}
+          </Text>
+          <Text
+            variant="caption"
+            color={
+              syncCaption === 'Synced ✓'
+                ? colors.tokens.success.text
+                : syncCaption === 'Syncing…'
+                  ? colors.tokens.info.text
+                  : colors.muted
+            }
+            accessibilityLiveRegion={syncCaption ? 'polite' : undefined}
+          >
+            {syncCaption ?? formatRelativeTime(item.createdAt)}
+          </Text>
+        </View>
+        <Badge
+          label={formatLeadLabel(item.leadQualifier)}
+          lead={item.leadQualifier}
+        />
+      </Card>
+    </Animated.View>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const { openScanner } = useLocalSearchParams<{ openScanner?: string }>();
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const isDark = colors.isDark;
   const user = useAuthStore((s) => s.user);
+  const setActiveSession = useSessionStore((s) => s.setActiveSession);
+  const pendingCount = useSyncStore(
+    (s) => s.pendingItems.filter((i) => i.status !== 'syncing').length,
+  );
+  const getSyncCaption = useContactSaveStore((s) => s.getSyncCaption);
+
+  const [scanVisible, setScanVisible] = useState(false);
+  const scanScale = useSharedValue(1);
+
+  React.useEffect(() => {
+    if (openScanner === '1') {
+      setScanVisible(true);
+      router.replace('/(tabs)/home');
+    }
+  }, [openScanner, router]);
+
   const me = useQuery({
     queryKey: ['me'],
     queryFn: () => api.get('/auth/me').then((r) => r.data.data),
     enabled: !!user,
   });
 
-  const profile = me.data ?? user;
-  const setActiveSession = useSessionStore((s) => s.setActiveSession);
-  const pendingCount = useSyncStore(
-    (s) => s.pendingItems.filter((i) => i.status !== 'syncing').length,
-  );
-
-  const [scannerVisible, setScannerVisible] = useState(false);
-
-  React.useEffect(() => {
-    if (openScanner === '1') {
-      setScannerVisible(true);
-      router.replace('/(tabs)/home');
-    }
-  }, [openScanner, router]);
-
-  // Queries
   const contacts = useQuery({
     queryKey: ['contacts', 'recent'],
     queryFn: () => fetchContacts(api, { limit: 100 }),
   });
+
   const sessions = useQuery({
     queryKey: ['sessions', 'mine', 'active'],
     queryFn: () =>
       fetchSessions(api, { limit: 10, status: 'active', mine: true }),
   });
 
-  const getGreeting = () => {
-    const hrs = new Date().getHours();
-    if (hrs < 12) return 'Good morning';
-    if (hrs < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+  const profile = me.data ?? user;
+  const firstName = profile?.fullName?.split(' ')[0] ?? 'there';
+  const isLoading = contacts.isLoading || sessions.isLoading;
 
-  const totalScans = profile?.cardsScanned ?? contacts.data?.meta?.total ?? 0;
-  const returningScans =
-    contacts.data?.items.filter(
-      (c) => (c.emails?.length ?? 0) > 1 || c.isMerged,
-    ).length ?? 0;
+  const contactItems = contacts.data?.items ?? [];
+  const sessionItems = sessions.data?.items ?? [];
+  const totalContacts = contacts.data?.meta?.total ?? contactItems.length;
+  const activeSessionCount = sessionItems.length;
+
+  const todayCount = useMemo(
+    () =>
+      contactItems.filter((contact) =>
+        isSameDay(new Date(contact.createdAt), new Date()),
+      ).length,
+    [contactItems],
+  );
+
+  const recentActivity = useMemo(
+    () =>
+      [...contactItems]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
+        .slice(0, 8),
+    [contactItems],
+  );
+
+  const isEmpty =
+    !isLoading &&
+    contactItems.length === 0 &&
+    sessionItems.length === 0 &&
+    !contacts.isError &&
+    !sessions.isError;
+
   const lastSyncedAt = contacts.dataUpdatedAt
     ? new Date(contacts.dataUpdatedAt).toLocaleTimeString([], {
         hour: 'numeric',
@@ -88,450 +228,379 @@ export default function HomeScreen() {
       })
     : null;
 
-  const activeSessions = sessions.data?.items ?? [];
-  const liveCount = activeSessions.length;
+  const syncCaption = contacts.isError
+    ? 'Offline'
+    : pendingCount > 0
+      ? `${pendingCount} pending sync`
+      : lastSyncedAt
+        ? `Synced ${lastSyncedAt}`
+        : 'Synced';
 
-  const handleResumeSession = (session: EventSessionRecord) => {
-    setActiveSession(session.id, session.mode);
-    setScannerVisible(true);
-  };
+  const syncDotColor = contacts.isError
+    ? colors.tokens.error.text
+    : pendingCount > 0
+      ? colors.tokens.warning.text
+      : colors.tokens.success.text;
+
+  const openScanSheet = useCallback(() => {
+    setScanVisible(true);
+  }, []);
+
+  const handleResumeSession = useCallback(
+    (session: EventSessionRecord) => {
+      setActiveSession(session.id, session.mode);
+      setScanVisible(true);
+    },
+    [setActiveSession],
+  );
+
+  const scanAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scanScale.value }],
+  }));
+
+  const onScanPressIn = useCallback(() => {
+    void haptics.light();
+    pressScale(scanScale, true);
+  }, [scanScale]);
+
+  const onScanPressOut = useCallback(() => {
+    pressScale(scanScale, false);
+  }, [scanScale]);
+
+  const quickActions: QuickAction[] = [
+    {
+      key: 'visitor',
+      label: 'Visitor',
+      icon: 'business-outline',
+      onPress: () =>
+        router.push({
+          pathname: '/events/create',
+          params: { initialMode: 'visitor' },
+        }),
+    },
+    {
+      key: 'exhibitor',
+      label: 'Exhibitor',
+      icon: 'briefcase-outline',
+      onPress: () =>
+        router.push({
+          pathname: '/events/create',
+          params: { initialMode: 'exhibitor' },
+        }),
+    },
+    {
+      key: 'manual',
+      label: 'Manual entry',
+      icon: 'create-outline',
+      onPress: () => router.push('/contact/create'),
+    },
+  ];
+
+  const renderActivityRow: ListRenderItem<ContactRecord> = useCallback(
+    ({ item, index }) => (
+      <ActivityFeedRow
+        item={item}
+        index={index}
+        syncCaption={getSyncCaption(item.fullName)}
+        onPress={() => router.push(`/contact/${item.id}`)}
+      />
+    ),
+    [getSyncCaption, router],
+  );
+
+  const listHeader = (
+    <View style={styles.headerContent}>
+      <View style={styles.headerRow}>
+        <View style={styles.headerCopy}>
+          <Text
+            variant="h2"
+            color={colors.text}
+            accessibilityRole="header"
+            style={styles.greeting}
+          >
+            {getGreeting()}, {firstName}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Sync status: ${syncCaption}`}
+            accessibilityHint="Opens sync status details"
+            onPress={() => router.push('/sync-status')}
+            style={styles.syncRow}
+          >
+            <View
+              style={[styles.syncDot, { backgroundColor: syncDotColor }]}
+            />
+            <Text
+              variant="caption"
+              color={colors.muted}
+              accessibilityLiveRegion="polite"
+            >
+              {syncCaption}
+            </Text>
+          </Pressable>
+        </View>
+        <Card
+          elevation={1}
+          onPress={() => router.push('/(tabs)/profile')}
+          style={styles.settingsButton}
+          accessibilityLabel="Open settings"
+          accessibilityHint="Opens app settings and preferences"
+        >
+          <Ionicons
+            name="settings-outline"
+            size={22}
+            color={colors.text}
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          />
+        </Card>
+      </View>
+
+      <AnimatedPressable
+        accessibilityRole="button"
+        accessibilityLabel="Scan a business card"
+        accessibilityHint="Opens the camera scanner to capture a new contact"
+        onPress={openScanSheet}
+        onPressIn={onScanPressIn}
+        onPressOut={onScanPressOut}
+        style={[
+          styles.scanCta,
+          scanAnimatedStyle,
+          { backgroundColor: colors.tokens.accent[500] },
+        ]}
+      >
+        <Ionicons
+          name="camera-outline"
+          size={22}
+          color={colors.tokens.neutral[0]}
+        />
+        <Text variant="bodyStrong" color={colors.tokens.neutral[0]}>
+          Scan a card
+        </Text>
+      </AnimatedPressable>
+
+      {isLoading ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.kpiRow}
+        >
+          <SkeletonKPICard />
+          <SkeletonKPICard />
+          <SkeletonKPICard />
+        </ScrollView>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={KPI_SNAP_INTERVAL}
+          snapToAlignment="start"
+          contentContainerStyle={styles.kpiRow}
+        >
+          <KPICard
+            value={totalContacts}
+            label="Contacts"
+            trend={buildTrend(totalContacts)}
+            accentColor={colors.tokens.primary[500]}
+          />
+          <KPICard
+            value={todayCount}
+            label="Today"
+            trend={buildTrend(todayCount)}
+            accentColor={colors.accent}
+          />
+          <KPICard
+            value={activeSessionCount}
+            label="Active Sessions"
+            trend={buildTrend(activeSessionCount)}
+            accentColor={colors.tokens.success.text}
+          />
+        </ScrollView>
+      )}
+
+      <View style={styles.sectionHeader}>
+        <Text variant="h3" color={colors.text} accessibilityRole="header">
+          Active Sessions
+        </Text>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="See all active sessions"
+          onPress={() => router.push('/sessions/browse')}
+          style={styles.seeAllButton}
+        >
+          <Text variant="bodyStrong" color={colors.tokens.primary[500]}>
+            See all
+          </Text>
+        </Pressable>
+      </View>
+
+      {isLoading ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.sessionRow}
+        >
+          <SkeletonSessionCard />
+          <SkeletonSessionCard />
+          <SkeletonSessionCard />
+        </ScrollView>
+      ) : sessions.isError ? (
+        <Text variant="caption" color={colors.tokens.error.text}>
+          {getApiErrorMessage(sessions.error)}
+        </Text>
+      ) : sessionItems.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={SESSION_SNAP_INTERVAL}
+          snapToAlignment="start"
+          contentContainerStyle={styles.sessionRow}
+        >
+          {sessionItems.map((session) => (
+            <SessionCard
+              key={session.id}
+              title={session.name}
+              subtitle={`${session.mode.replace('_', ' ')} · ${
+                session.status === 'active' ? 'active now' : session.status
+              }`}
+              contactCount={session.scanCount}
+              onPress={() => handleResumeSession(session)}
+              style={styles.sessionCardSpacing}
+              thumbnail={
+                <View
+                  style={[
+                    styles.sessionThumb,
+                    {
+                      backgroundColor:
+                        session.mode === 'exhibitor'
+                          ? colors.tokens.primary[100]
+                          : colors.tokens.neutral[100],
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      session.mode === 'exhibitor'
+                        ? 'briefcase'
+                        : 'people-outline'
+                    }
+                    size={22}
+                    color={
+                      session.mode === 'exhibitor'
+                        ? colors.tokens.primary[500]
+                        : colors.muted
+                    }
+                  />
+                </View>
+              }
+            />
+          ))}
+        </ScrollView>
+      ) : (
+        <Text variant="caption" color={colors.muted}>
+          No active sessions right now.
+        </Text>
+      )}
+
+      <Text
+        variant="h3"
+        color={colors.text}
+        accessibilityRole="header"
+        style={styles.sectionTitle}
+      >
+        Quick Actions
+      </Text>
+      <View style={styles.quickActionsRow}>
+        {quickActions.map((action) => (
+          <Card
+            key={action.key}
+            elevation={1}
+            onPress={action.onPress}
+            style={styles.quickActionChip}
+            accessibilityLabel={action.label}
+          >
+            <Ionicons name={action.icon} size={20} color={colors.text} />
+            <Text
+              variant="caption"
+              color={colors.text}
+              style={styles.quickActionLabel}
+              numberOfLines={2}
+            >
+              {action.label}
+            </Text>
+          </Card>
+        ))}
+      </View>
+
+      <Text
+        variant="h3"
+        color={colors.text}
+        accessibilityRole="header"
+        style={styles.sectionTitle}
+      >
+        Recent Activity
+      </Text>
+
+      {isLoading ? (
+        <View>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : null}
+    </View>
+  );
+
+  if (isEmpty) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        edges={['top', 'left', 'right']}
+      >
+        <EmptyState
+          illustration={
+            <ScanIllustration
+              color={colors.text}
+              accent={colors.tokens.primary[500]}
+            />
+          }
+          headline="Start capturing leads"
+          body="Scan your first business card or create a contact manually to populate your workspace."
+          actionLabel="Scan a card"
+          onAction={openScanSheet}
+        />
+        <ScanBottomSheet
+          visible={scanVisible}
+          onClose={() => setScanVisible(false)}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={['top', 'left', 'right']}
     >
-      <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={[styles.orgName, { color: colors.muted }]}>
-              {profile?.organizationName ?? 'Your organization'}
-            </Text>
-            <Text style={[styles.greeting, { color: colors.text }]}>
-              {getGreeting()}, {profile?.fullName?.split(' ')[0] ?? 'there'}
-            </Text>
-            <View style={styles.statusRow}>
-              <Ionicons
-                name={contacts.isError ? 'cloud-offline-outline' : 'wifi'}
-                size={14}
-                color={contacts.isError ? '#EF4444' : '#22C55E'}
-              />
-              <Text style={styles.statusText}>
-                {contacts.isError
-                  ? 'Offline'
-                  : lastSyncedAt
-                    ? `Synced ${lastSyncedAt}`
-                    : 'Synced'}
-                <Text style={[styles.statusMuted, { color: colors.muted }]}>
-                  {' '}
-                  · {totalScans} scans · {returningScans} returning
-                </Text>
-              </Text>
-            </View>
-            {pendingCount > 0 ? (
-              <Pressable
-                style={styles.syncPill}
-                onPress={() => router.push('/sync-status')}
-              >
-                <Ionicons
-                  name="cloud-upload-outline"
-                  size={12}
-                  color="#D97706"
-                />
-                <Text style={styles.syncPillText}>
-                  {pendingCount} pending sync
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <Pressable
-            style={[
-              styles.searchBtn,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-            onPress={() => router.push('/(tabs)/contacts')}
-          >
-            <Ionicons name="search" size={20} color={colors.text} />
-          </Pressable>
-        </View>
-
-        {/* Capture Mode List */}
-        <Text style={[styles.sectionTitle, { color: colors.muted }]}>
-          Capture Mode
-        </Text>
-
-        <Pressable
-          style={[
-            styles.modeListItem,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-          onPress={() =>
-            router.push({
-              pathname: '/events/create',
-              params: { initialMode: 'visitor' },
-            })
-          }
-        >
-          <View
-            style={[
-              styles.modeIconBg,
-              { backgroundColor: isDark ? '#0F172A' : '#F1F5F9' },
-            ]}
-          >
-            <Ionicons
-              name="business-outline"
-              size={20}
-              color={isDark ? '#94A3B8' : '#475569'}
-            />
-          </View>
-          <View style={styles.modeItemContent}>
-            <View style={styles.modeItemHeader}>
-              <Text style={[styles.modeItemName, { color: colors.text }]}>
-                Visitor Mode
-              </Text>
-              <View
-                style={[
-                  styles.modeItemBadge,
-                  isDark && { backgroundColor: '#334155' },
-                ]}
-              >
-                <Text
-                  style={[styles.modeItemBadgeText, { color: colors.muted }]}
-                >
-                  Event-linked
-                </Text>
-              </View>
-            </View>
-            <Text style={[styles.modeItemDesc, { color: colors.muted }]}>
-              Structured capture tied to an event agenda and booths.
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
-
-        <Pressable
-          style={[
-            styles.modeListItem,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-          onPress={() =>
-            router.push({
-              pathname: '/events/create',
-              params: { initialMode: 'exhibitor' },
-            })
-          }
-        >
-          <View
-            style={[
-              styles.modeIconBg,
-              { backgroundColor: isDark ? '#1E3A8A' : '#EFF6FF' },
-            ]}
-          >
-            <Ionicons
-              name="briefcase-outline"
-              size={20}
-              color={isDark ? '#60A5FA' : '#2563EB'}
-            />
-          </View>
-          <View style={styles.modeItemContent}>
-            <View style={styles.modeItemHeader}>
-              <Text style={[styles.modeItemName, { color: colors.text }]}>
-                Exhibitor Mode
-              </Text>
-              <View
-                style={[
-                  styles.modeItemBadge,
-                  { backgroundColor: isDark ? '#064E3B' : '#ECFDF5' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.modeItemBadgeText,
-                    { color: isDark ? '#34D399' : '#047857' },
-                  ]}
-                >
-                  Live stats
-                </Text>
-              </View>
-            </View>
-            <Text style={[styles.modeItemDesc, { color: colors.muted }]}>
-              Fast capture with lead qualification and team live view.
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
-
-        <Pressable
-          style={[
-            styles.modeListItem,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-          onPress={() => router.push('/encounter-select')}
-        >
-          <View
-            style={[
-              styles.modeIconBg,
-              { backgroundColor: isDark ? '#065F46' : '#F0FDF4' },
-            ]}
-          >
-            <Ionicons
-              name="flash-outline"
-              size={20}
-              color={isDark ? '#34D399' : '#16A34A'}
-            />
-          </View>
-          <View style={styles.modeItemContent}>
-            <View style={styles.modeItemHeader}>
-              <Text style={[styles.modeItemName, { color: colors.text }]}>
-                Quick Capture
-              </Text>
-              <View
-                style={[
-                  styles.modeItemBadge,
-                  isDark && { backgroundColor: '#334155' },
-                ]}
-              >
-                <Text
-                  style={[styles.modeItemBadgeText, { color: colors.muted }]}
-                >
-                  No event link
-                </Text>
-              </View>
-            </View>
-            <Text style={[styles.modeItemDesc, { color: colors.muted }]}>
-              Direct scan to your contact list.
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
-
-        {/* Active Sessions */}
-        <View style={styles.sectionHeaderAlt}>
-          <Text style={[styles.sectionTitle, { color: colors.muted }]}>
-            Active Sessions
-          </Text>
-          <Text style={[styles.sectionBadge, { color: colors.muted }]}>
-            {liveCount} live
-          </Text>
-        </View>
-
-        {sessions.isLoading ? (
-          <ActivityIndicator
-            color={COLORS.accent}
-            style={{ marginVertical: 24 }}
-          />
-        ) : sessions.isError ? (
-          <Text style={styles.errorText}>
-            {getApiErrorMessage(sessions.error)}
-          </Text>
-        ) : activeSessions.length ? (
-          activeSessions.map((s: EventSessionRecord) => {
-            const targetScans = s.mode === 'exhibitor' ? 200 : 60;
-            const progress = Math.min(s.scanCount / targetScans, 1);
-
-            return (
-              <View
-                key={s.id}
-                style={[
-                  styles.sessionCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                {/* Mode and Avatars */}
-                <View style={styles.cardHeader}>
-                  <View
-                    style={[
-                      styles.modePill,
-                      s.mode === 'exhibitor'
-                        ? isDark
-                          ? { backgroundColor: '#1E3A8A' }
-                          : styles.modeExhibitor
-                        : isDark
-                          ? { backgroundColor: '#334155' }
-                          : styles.modeVisitor,
-                    ]}
-                  >
-                    <Ionicons
-                      name={s.mode === 'exhibitor' ? 'briefcase' : 'people'}
-                      size={12}
-                      color={
-                        s.mode === 'exhibitor'
-                          ? isDark
-                            ? '#60A5FA'
-                            : '#0284C7'
-                          : isDark
-                            ? '#94A3B8'
-                            : '#64748B'
-                      }
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text
-                      style={[
-                        styles.modeText,
-                        s.mode === 'exhibitor'
-                          ? isDark
-                            ? { color: '#60A5FA' }
-                            : styles.modeTextExhibitor
-                          : isDark
-                            ? { color: '#94A3B8' }
-                            : styles.modeTextVisitor,
-                      ]}
-                    >
-                      {s.mode.toUpperCase()}
-                    </Text>
-                    {s.mode === 'exhibitor' && (
-                      <Text style={styles.liveDot}> • LIVE</Text>
-                    )}
-                  </View>
-
-                  <SessionMemberAvatars sessionId={s.id} />
-                </View>
-
-                {/* Session Title */}
-                <Text style={[styles.sessionName, { color: colors.text }]}>
-                  {s.name}
-                </Text>
-
-                {/* Progress bar */}
-                <View style={styles.progressRow}>
-                  <Text style={[styles.progressText, { color: colors.muted }]}>
-                    <Text style={{ fontWeight: '700', color: colors.text }}>
-                      {s.scanCount}
-                    </Text>{' '}
-                    / {targetScans} scans
-                  </Text>
-                  <Text style={[styles.timeText, { color: colors.muted }]}>
-                    {s.status === 'active' ? 'active now' : s.status}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.progressBarBg,
-                    { backgroundColor: isDark ? '#0F172A' : '#F1F5F9' },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      {
-                        width: `${progress * 100}%`,
-                        backgroundColor: isDark ? '#3B82F6' : '#1E293B',
-                      },
-                    ]}
-                  />
-                </View>
-
-                {/* Lead Breakdown Counts */}
-                <View style={styles.statsRow}>
-                  <View
-                    style={[
-                      styles.statPill,
-                      {
-                        backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[styles.statDot, { backgroundColor: '#EF4444' }]}
-                    />
-                    <Text style={[styles.statLabel, { color: colors.muted }]}>
-                      HOT
-                    </Text>
-                    <Text style={[styles.statCount, { color: colors.text }]}>
-                      {s.hotCount}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.statPill,
-                      {
-                        backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[styles.statDot, { backgroundColor: '#F59E0B' }]}
-                    />
-                    <Text style={[styles.statLabel, { color: colors.muted }]}>
-                      WARM
-                    </Text>
-                    <Text style={[styles.statCount, { color: colors.text }]}>
-                      {s.warmCount}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.statPill,
-                      {
-                        backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[styles.statDot, { backgroundColor: '#3B82F6' }]}
-                    />
-                    <Text style={[styles.statLabel, { color: colors.muted }]}>
-                      COLD
-                    </Text>
-                    <Text style={[styles.statCount, { color: colors.text }]}>
-                      {s.coldCount}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Resume button */}
-                <Pressable
-                  style={styles.resumeBtn}
-                  onPress={() => handleResumeSession(s)}
-                >
-                  <Text style={styles.resumeText}>Resume Session</Text>
-                  <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
-                </Pressable>
-              </View>
-            );
-          })
-        ) : (
-          <View
-            style={[
-              styles.emptyCard,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.emptyText, { color: colors.muted }]}>
-              No active events yet. Create one or browse organization sessions.
-            </Text>
-            <Pressable
-              style={styles.browseBtn}
-              onPress={() => router.push('/sessions/browse')}
-            >
-              <Text style={styles.browseBtnText}>Browse sessions</Text>
-            </Pressable>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Floating Action Button (FAB) */}
-      <Pressable
-        style={[
-          styles.fab,
-          { bottom: 56 + (insets.bottom > 0 ? insets.bottom : 8) + 16 },
+      <FlatList
+        data={isLoading ? [] : recentActivity}
+        keyExtractor={(item) => item.id}
+        renderItem={renderActivityRow}
+        ListHeaderComponent={listHeader}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: insets.bottom + space[10] },
         ]}
-        onPress={() => setScannerVisible(true)}
-      >
-        <Ionicons name="camera" size={24} color="#FFFFFF" />
-      </Pressable>
+        showsVerticalScrollIndicator={false}
+      />
 
-      {/* Camera Scan Modal */}
-      <CameraScannerModal
-        visible={scannerVisible}
-        onClose={() => setScannerVisible(false)}
+      <ScanBottomSheet
+        visible={scanVisible}
+        onClose={() => setScanVisible(false)}
       />
     </SafeAreaView>
   );
@@ -540,328 +609,120 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F6F8',
   },
-  root: {
-    flex: 1,
+  listContent: {
+    paddingHorizontal: space[4],
+    paddingTop: space[3],
   },
-  content: {
-    padding: 20,
-    paddingBottom: 100,
+  headerContent: {
+    gap: space[4],
+    marginBottom: space[2],
   },
-  header: {
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginTop: 12,
-    marginBottom: 24,
+    gap: space[3],
   },
-  orgName: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  headerCopy: {
+    flex: 1,
+    gap: space[2],
   },
   greeting: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
+    flexShrink: 1,
   },
-  statusRow: {
+  syncRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    gap: 4,
+    gap: space[2],
+    minHeight: 44,
+    alignSelf: 'flex-start',
   },
-  statusText: {
-    fontSize: 12,
-    color: '#22C55E',
-    fontWeight: '600',
+  syncDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
   },
-  statusMuted: {
-    color: '#64748B',
-    fontWeight: '400',
-  },
-  searchBtn: {
+  settingsButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: '#ffffff',
+    padding: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  },
+  scanCta: {
+    minHeight: 56,
+    borderRadius: radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space[2],
+    paddingHorizontal: space[4],
+  },
+  kpiRow: {
+    gap: space[4],
+    paddingVertical: space[1],
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: space[3],
+    marginTop: space[2],
+  },
+  seeAllButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: space[2],
+  },
+  sessionRow: {
+    gap: space[4],
+    paddingVertical: space[1],
+  },
+  sessionCardSpacing: {
+    marginBottom: 0,
+  },
+  sessionThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginTop: space[2],
   },
-  sectionHeaderAlt: {
+  quickActionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    marginBottom: 12,
+    gap: space[3],
   },
-  sectionBadge: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  sessionCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E8F0F8',
-    marginBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  modePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  modeVisitor: {
-    backgroundColor: '#F1F5F9',
-  },
-  modeExhibitor: {
-    backgroundColor: '#EFF6FF',
-  },
-  modeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  modeTextVisitor: {
-    color: '#475569',
-  },
-  modeTextExhibitor: {
-    color: '#1D4ED8',
-  },
-  liveDot: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#22C55E',
-  },
-  avatarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  quickActionChip: {
+    flex: 1,
+    minHeight: 72,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#ffffff',
+    gap: space[2],
+    paddingVertical: space[3],
   },
-  avatarInitials: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  sessionName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 6,
-  },
-  progressText: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  timeText: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  progressBarBg: {
-    height: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 3,
-    marginBottom: 14,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#1E293B',
-    borderRadius: 3,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-  },
-  statPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    justifyContent: 'space-between',
-  },
-  statDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-    flex: 1,
-    marginLeft: 6,
-  },
-  statCount: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  resumeBtn: {
-    flexDirection: 'row',
-    backgroundColor: '#1E2D4A',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  resumeText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  emptyCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 13,
-    color: '#64748B',
+  quickActionLabel: {
     textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 12,
   },
-  browseBtn: {
-    backgroundColor: '#1E2D4A',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  browseBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 13 },
-  syncPill: {
+  activityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: space[3],
+    marginBottom: space[3],
   },
-  syncPillText: { fontSize: 11, fontWeight: '600', color: '#D97706' },
-  modeListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E8F0F8',
-    marginBottom: 10,
-  },
-  modeIconBg: {
+  avatar: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  modeItemContent: {
+  activityBody: {
     flex: 1,
-  },
-  modeItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2,
-    gap: 6,
-  },
-  modeItemName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  modeItemBadge: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  modeItemBadgeText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  modeItemDesc: {
-    fontSize: 11,
-    color: '#64748B',
-    lineHeight: 14,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#1E2D4A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    zIndex: 10,
-  },
-  errorText: {
-    color: '#DC2626',
-    textAlign: 'center',
-    marginVertical: 12,
+    gap: space[1],
+    paddingRight: space[2],
   },
 });

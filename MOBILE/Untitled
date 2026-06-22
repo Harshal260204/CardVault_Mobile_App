@@ -1,0 +1,23 @@
+Build a reusable skeleton-loading system for CardVault (React Native + TypeScript + Reanimated), replacing all bare ActivityIndicator usage app-wide.
+
+File: src/components/Skeleton.tsx
+
+Exports:
+- <SkeletonBase> — a base rectangle with a shimmer effect: a translateX-animated linear gradient (use react-native-linear-gradient or expo-linear-gradient) sweeping left-to-right over a neutral.100/neutral.200 base, looping every 1200ms via Reanimated's withRepeat(withTiming(...)).
+- <SkeletonText lines={n} /> — stacked SkeletonBase bars sized to type.body line-height, last line shorter (70% width) to mimic natural text wrap.
+- <SkeletonCard /> — shaped to match the generic Card component's typical content (avatar circle + 2 text lines).
+- <SkeletonKPICard /> — shaped to match KPICard (number block + label block).
+- <SkeletonSessionCard /> — shaped to match SessionCard.
+
+Integration:
+- Update home.tsx to show SkeletonKPICard x3 and SkeletonSessionCard x3 and SkeletonCard x5 (activity feed) while initial data is loading, instead of any ActivityIndicator.
+- Update ocr-review.tsx's image-processing step to show a SkeletonCard-shaped placeholder while OCR results are pending, instead of ActivityIndicator.
+
+Requirements:
+- TypeScript strict, no `any`.
+- Respect reduced-motion: check AccessibilityInfo.isReduceMotionEnabled() and fall back to a static (non-animated) skeleton fill when true.
+
+Acceptance criteria:
+- No ActivityIndicator remains in home.tsx or the OCR loading state.
+- Skeleton shapes visually match their loaded-state counterparts (same approximate dimensions).
+- Shimmer respects the reduced-motion accessibility setting.

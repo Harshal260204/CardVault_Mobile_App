@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -17,9 +17,11 @@ import {
 } from 'react-native-safe-area-context';
 
 import CameraScannerModal from '@/components/CameraScannerModal';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { FAB } from '@/components/FAB';
+import { SwipeableArchiveRow } from '@/components/SwipeableArchiveRow';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { api } from '@/lib/api';
-import { fetchContacts } from '@/lib/api-client';
+import { deleteContact, fetchContacts } from '@/lib/api-client';
 import { COLORS } from '@/lib/constants';
 import { initials } from '@/lib/format';
 
@@ -63,6 +65,7 @@ function formatRelativeTime(dateString: string): string {
 
 export default function ContactsScreen() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [q, setQ] = useState('');
   const [scannerVisible, setScannerVisible] = useState(false);
   const colors = useThemeColors();
@@ -71,6 +74,13 @@ export default function ContactsScreen() {
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['contacts', q],
     queryFn: () => fetchContacts(api, { q: q || undefined, limit: 50 }),
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (contactId: string) => deleteContact(api, contactId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['contacts'] });
+    },
   });
 
   return (
@@ -128,69 +138,70 @@ export default function ContactsScreen() {
               : item.company || item.emails[0] || '—';
 
             return (
-              <Pressable
-                style={[
-                  styles.row,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() =>
-                  router.push({
-                    pathname: '/contact/[id]',
-                    params: { id: item.id },
-                  })
-                }
+              <SwipeableArchiveRow
+                onArchive={() => archiveMutation.mutate(item.id)}
               >
-                {/* Left Avatar circle */}
-                <View
+                <Pressable
                   style={[
-                    styles.avatarCircle,
-                    { backgroundColor: getAvatarBg(item.fullName) },
+                    styles.row,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
                   ]}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/contact/[id]',
+                      params: { id: item.id },
+                    })
+                  }
                 >
-                  <Text style={styles.avatarText}>
-                    {initials(item.fullName)}
-                  </Text>
-                </View>
-
-                {/* Contact Info */}
-                <View style={styles.info}>
-                  <Text
-                    style={[styles.name, { color: colors.text }]}
-                    numberOfLines={1}
+                  {/* Left Avatar circle */}
+                  <View
+                    style={[
+                      styles.avatarCircle,
+                      { backgroundColor: getAvatarBg(item.fullName) },
+                    ]}
                   >
-                    {item.fullName}
-                  </Text>
-                  <Text
-                    style={[styles.subtitle, { color: colors.muted }]}
-                    numberOfLines={1}
-                  >
-                    {subtitle}
-                  </Text>
-                </View>
+                    <Text style={styles.avatarText}>
+                      {initials(item.fullName)}
+                    </Text>
+                  </View>
 
-                {/* Relative Time */}
-                <Text style={[styles.time, { color: colors.muted }]}>
-                  {formatRelativeTime(item.createdAt)}
-                </Text>
-              </Pressable>
+                  {/* Contact Info */}
+                  <View style={styles.info}>
+                    <Text
+                      style={[styles.name, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {item.fullName}
+                    </Text>
+                    <Text
+                      style={[styles.subtitle, { color: colors.muted }]}
+                      numberOfLines={1}
+                    >
+                      {subtitle}
+                    </Text>
+                  </View>
+
+                  {/* Relative Time */}
+                  <Text style={[styles.time, { color: colors.muted }]}>
+                    {formatRelativeTime(item.createdAt)}
+                  </Text>
+                </Pressable>
+              </SwipeableArchiveRow>
             );
           }}
         />
       )}
 
-      {/* FAB */}
-      <Pressable
-        style={[
-          styles.fab,
-          { bottom: 56 + (insets.bottom > 0 ? insets.bottom : 8) + 16 },
-        ]}
+      <FAB
+        accessibilityLabel="Scan a business card"
         onPress={() => setScannerVisible(true)}
-      >
-        <Ionicons name="camera" size={24} color="#FFFFFF" />
-      </Pressable>
+        style={{
+          bottom: 56 + (insets.bottom > 0 ? insets.bottom : 8) + 16,
+        }}
+      />
 
       {/* Camera Scan Modal */}
       <CameraScannerModal
@@ -246,7 +257,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 14,
-    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E8F0F8',
   },
@@ -290,22 +300,5 @@ const styles = StyleSheet.create({
   empty: {
     fontSize: 14,
     color: COLORS.muted,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#1E2D4A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    zIndex: 10,
   },
 });

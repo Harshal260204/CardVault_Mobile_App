@@ -4,8 +4,9 @@ module.exports = {
     'expo',
     require.resolve('@cardvault/eslint-config/base'),
     'plugin:prettier/recommended',
+    'plugin:react-native-a11y/all',
   ],
-  plugins: ['import'],
+  plugins: ['import', 'react-native-a11y'],
   settings: {
     'import/resolver': {
       typescript: {
@@ -17,6 +18,7 @@ module.exports = {
   rules: {
     'react-hooks/exhaustive-deps': 'warn',
     'react-hooks/rules-of-hooks': 'error',
+    'react-native-a11y/has-accessibility-hint': 'off',
   },
   ignorePatterns: ['.eslintrc.js', 'node_modules/', '.expo/', 'babel.config.js', 'metro.config.js'],
 };

@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ContactForm, type ContactFormValues } from '@/components/contact-form';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { Text } from '@/components/Text';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { api } from '@/lib/api';
 import {
   fetchContact,
@@ -12,6 +13,7 @@ import {
   updateContact,
 } from '@/lib/api-client';
 import type { CaptureMode } from '@/lib/types';
+import { space } from '@/tokens/spacing';
 
 export default function EditContactScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,16 +39,13 @@ export default function EditContactScreen() {
         queryClient.invalidateQueries({ queryKey: ['contacts'] }),
         queryClient.invalidateQueries({ queryKey: ['contact', id] }),
       ]);
-      router.replace({ pathname: '/contact/[id]', params: { id: id! } });
     },
-    onError: (error) =>
-      Alert.alert('Unable to update contact', getApiErrorMessage(error)),
   });
 
   if (contactQuery.isLoading || !contactQuery.data) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={[styles.loadingText, { color: colors.muted }]}>
+        <Text variant="body" color={colors.muted}>
           {contactQuery.isLoading
             ? 'Loading contact...'
             : 'Unable to load contact.'}
@@ -76,41 +75,52 @@ export default function EditContactScreen() {
     <ScrollView
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
     >
-      <Text style={[styles.title, { color: colors.text }]}>Edit contact</Text>
-      <Text style={[styles.subtitle, { color: colors.muted }]}>
+      <Text variant="h2" color={colors.text} accessibilityRole="header">
+        Edit contact
+      </Text>
+      <Text variant="body" color={colors.muted} style={styles.subtitle}>
         Update lead details, category, and event assignment.
       </Text>
-      <ContactForm
-        initialValues={initialValues}
-        sessions={sessionsQuery.data?.items ?? []}
-        isSubmitting={updateMutation.isPending}
-        submitLabel="Save contact"
-        onSubmit={(payload) => {
-          if (!payload.fullName.trim()) {
-            Alert.alert(
-              'Full name required',
-              'Please enter a name before saving.',
-            );
-            return;
-          }
-          updateMutation.mutate(payload);
-        }}
-      />
+      <View style={styles.formWrap}>
+        <ContactForm
+          initialValues={initialValues}
+          sessions={sessionsQuery.data?.items ?? []}
+          submitLabel="Save contact"
+          onSubmit={async (payload, _meta) => {
+            await updateMutation.mutateAsync(payload);
+            router.replace({ pathname: '/contact/[id]', params: { id: id! } });
+          }}
+        />
+      </View>
+      {updateMutation.isError ? (
+        <Text
+          variant="caption"
+          color={colors.tokens.error.text}
+          style={styles.screenError}
+          accessibilityLiveRegion="polite"
+        >
+          {getApiErrorMessage(updateMutation.error)}
+        </Text>
+      ) : null}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { padding: 20, paddingBottom: 32 },
+  content: { padding: space[4], paddingBottom: space[8] },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: space[5],
   },
-  loadingText: {},
-  title: { fontSize: 22, fontWeight: '800' },
-  subtitle: { marginTop: 6, marginBottom: 20, lineHeight: 20, fontSize: 14 },
+  subtitle: { marginTop: space[2], marginBottom: space[4] },
+  formWrap: { minHeight: 560 },
+  screenError: {
+    marginTop: space[3],
+    textAlign: 'center',
+  },
 });

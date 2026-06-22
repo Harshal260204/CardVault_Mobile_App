@@ -1,16 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ContactForm, type ContactFormValues } from '@/components/contact-form';
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { Text } from '@/components/Text';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { api } from '@/lib/api';
 import {
   createContact,
   fetchSessions,
-  getApiErrorMessage,
 } from '@/lib/api-client';
 import type { CaptureMode } from '@/lib/types';
+import { space } from '@/tokens/spacing';
 
 export default function CreateContactScreen() {
   const router = useRouter();
@@ -29,12 +30,9 @@ export default function CreateContactScreen() {
   type ContactPayload = Parameters<typeof createContact>[1];
   const createMutation = useMutation({
     mutationFn: (payload: ContactPayload) => createContact(api, payload),
-    onSuccess: async (contact) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      router.replace({ pathname: '/contact/[id]', params: { id: contact.id } });
     },
-    onError: (error) =>
-      Alert.alert('Unable to create contact', getApiErrorMessage(error)),
   });
 
   const initialValues: ContactFormValues = {
@@ -57,34 +55,35 @@ export default function CreateContactScreen() {
     <ScrollView
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
     >
-      <Text style={[styles.title, { color: colors.text }]}>Create contact</Text>
-      <Text style={[styles.subtitle, { color: colors.muted }]}>
-        Add a contact manually and optionally attach it to an event.
+      <Text variant="h2" color={colors.text} accessibilityRole="header">
+        Create contact
       </Text>
-      <ContactForm
-        initialValues={initialValues}
-        sessions={sessionsQuery.data?.items ?? []}
-        isSubmitting={createMutation.isPending}
-        submitLabel="Create contact"
-        onSubmit={(payload) => {
-          if (!payload.fullName.trim()) {
-            Alert.alert(
-              'Full name required',
-              'Please enter a name before saving.',
-            );
-            return;
-          }
-          createMutation.mutate(payload);
-        }}
-      />
+      <Text variant="body" color={colors.muted} style={styles.subtitle}>
+        Add a contact manually in four quick steps.
+      </Text>
+      <View style={styles.formWrap}>
+        <ContactForm
+          initialValues={initialValues}
+          sessions={sessionsQuery.data?.items ?? []}
+          submitLabel="Save Contact"
+          showSaveAndAddAnother
+          onSubmit={async (payload, { addAnother }) => {
+            await createMutation.mutateAsync(payload);
+            if (!addAnother) {
+              router.replace('/(tabs)/contacts');
+            }
+          }}
+        />
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { padding: 20, paddingBottom: 32 },
-  title: { fontSize: 22, fontWeight: '800' },
-  subtitle: { marginTop: 6, marginBottom: 20, lineHeight: 20, fontSize: 14 },
+  content: { padding: space[4], paddingBottom: space[8] },
+  subtitle: { marginTop: space[2], marginBottom: space[4] },
+  formWrap: { minHeight: 560 },
 });

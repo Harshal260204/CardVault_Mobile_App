@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 import { Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors } from '@/theme/useThemeColors';
 
 function TabLabel({
   title,

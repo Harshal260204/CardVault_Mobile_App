@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 
-import { useThemeColors } from '@/hooks/useThemeColors';
+import { useThemeColors } from '@/theme/useThemeColors';
 import { api } from '@/lib/api';
 import {
   deleteContact,
